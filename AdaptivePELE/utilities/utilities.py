@@ -14,6 +14,9 @@ from six import reraise as raise_
 import numpy as np
 import mdtraj as md
 from scipy import linalg
+import PPP.main as ppp
+import subprocess
+
 try:
     import cPickle as pickle
 except ImportError:
@@ -1039,3 +1042,136 @@ def get_file_extension(full_path):
     """
     _, ext = get_file_name_extension(full_path)
     return ext
+
+
+def protonate(path,epochdir):
+    dire = os.path.join(epochdir,"prot")
+    if not os.path.isdir(dire):
+        os.mkdir(dire)
+    filename = os.path.basename(path)
+    os.rename(path,os.path.join(dire,filename)) #this moves the structure to temp directory "prot"
+    os.chdir(dire)
+    #the following will take the proper ligand atoms
+    filetoopen = os.path.join(dire, filename)
+    with open(filetoopen) as traj:
+        with open("lig","w") as lig:
+            nre = 0
+            count = 0
+            lines = traj.readlines()
+            for line in lines:
+                if line.startswith("HETATM"):
+                    lig.write(line)
+                    count += 1
+                elif line.startswith("ENDMDL"):
+                    nre += 1
+                else:
+                    continue
+        modelength = len(lines)
+        linespermodel = modelength//nre
+        lengthlig = count//nre
+
+    for i in range(1,int(nre)+1):
+       with open("model_%s" % i,"a+") as model, open(filetoopen) as traj:
+            lines = traj.readlines()
+            linestowrite = lines[(linespermodel*i-linespermodel):(linespermodel*i)]
+            for line in linestowrite:
+                model.write(line)
+       model = "model_%s" % i
+       model = os.path.basename(model)
+       name = model
+       model = os.path.join(dire,model)
+       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", "0.mae"])
+       subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", "0.mae",
+                                    "0protonated.mae"])
+       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", "0protonated.mae", "-opdb",
+                                    name])
+       with open("model_%s" % i,"r") as model:
+           with open("model_0%s" % i,"a+") as model0:
+               lines = model.readlines()
+               for line in lines:
+                   if not line.startswith("TER") and not line.startswith("HETATM") and not line.startswith("CONECT") and not line.startswith("END"):
+                       model0.write(line)
+           with open("model_0%s" % i,"a") as model0:
+               with open("lig","r") as lig:
+                   liglines = lig.readlines()
+                   start, stop = (i*lengthlig-lengthlig), (i*lengthlig-1)
+                   for j in range(start,stop+1):
+                       model0.write(liglines[j])
+    rmv = glob.glob("*.log")+glob.glob("*.mae")
+    for f in rmv:
+        os.remove(os.path.join(dire,f))
+    filestomerge = glob.glob("model_0*")
+    for f in filestomerge:
+        num = int(f.split('_')[1])
+        os.rename(f,f + '.pdb')
+        file = os.path.join(dire,f + '.pdb')
+        protfile = ppp.main(file,dire)
+        protfile = protfile[0]
+        with open(protfile) as j:
+            with open("p" + str(num) + "_" + os.path.basename(f),"w+") as good:
+                good.write("MODEL"+"     "+str(num)+"\n")
+                for line in j:
+                    good.write(line)
+                good.write("ENDMDL\n\n")
+
+    merge = glob.glob("p*")
+    os.remove(filetoopen)
+    with open(filetoopen, "a") as traj:
+        for f in merge:
+            with open(f) as fil:
+                for line in fil:
+                    traj.write(line)
+
+    os.rename(filetoopen,os.path.join(epochdir,filename))
+    name = os.path.join(epochdir,filename)
+    files = glob.glob(dire+"/*")
+    for f in files:
+        os.remove(f)
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1/")
+    return name
+
+def process(file,dire,name,epochdir): # we need to eliminate extra lines in ligand
+    os.chdir(dire)
+    file = os.path.join(dire,file)
+    protfile = ppp.main(file, dire)  # this preprocess the file after propka (check that after this it changes the name of variable file)
+    protfile = protfile[0]
+    #protfile = os.path.join(dire,os.path.basename(protfile))
+    os.rename(protfile,os.path.join(epochdir,name))
+    os.remove(file)
+    procname = os.path.join(epochdir,name)
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1")
+    return procname
+
+def removelines(lig,filename,epochdir):
+
+    ligmal = []
+    withoutlig = []
+    # now we have the ligand and the length, so we can change the numeration
+    with open(filename) as file:
+        lines = file.readlines()
+        for line in lines:
+            if line.startswith("HETATM"):
+                ligmal.append(line)
+            if not line.startswith("TER") and not line.startswith("HETATM"):
+                withoutlig.append(line)
+    length2 = len(ligmal)
+    if length2 > length:
+        rest = length2 - length
+    elif length > length2:
+        rest = length - length2
+
+    newlig = ligmal[:-rest]
+
+    with open(os.path.join(epochdir,"0protonatedgood.pdb")) as file2:
+        for i in withoutlig:
+            f.write(i)
+        file2.write("TER\n")
+        for i in newlig:
+            f.write(i)
+        file2.write("TER\n")
+    os.rename(os.path.join(epochdir,"0protonatedgood.pdb"),filename)
+    correctprotein = filename
+
+    return correctprotein
+
+

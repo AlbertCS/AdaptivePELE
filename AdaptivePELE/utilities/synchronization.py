@@ -159,7 +159,7 @@ class ProcessesManager:
             file_descriptor.write("%d:%d:%s\n" % (pid, id_num, ";".join(status_set)))
         file_descriptor.truncate()
 
-    def isMaster(self):
+    def isMaster(self) -> object:
         """
             Return wether the current process is the master process
 

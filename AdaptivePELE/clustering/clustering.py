@@ -5,6 +5,7 @@ import ast
 import glob
 import heapq
 import numpy as np
+import subprocess #
 from scipy import stats
 from builtins import range
 from six import reraise as raise_
@@ -532,15 +533,22 @@ class Cluster(object):
                 identifying the structure added
         """
         if not self.altSelection or self.altStructure.sizePQ() == 0:
+            i=0
             print("cluster center")
-            self.pdb.writePDB(path)
+            #here we should put (if protonate true, and then protonate)
+            self.pdb.writePDB(path) #we need to modify this object in the other function so that the copied PDB is not from the trajectory but rather the protonated traj
+            i+=1
             return self.trajPosition
         else:
+            i=0
             spawnStruct, trajPosition = self.altStructure.altSpawnSelection((self.elements, self.pdb))
             spawnStruct.writePDB(path)
+            i+=1
             if trajPosition is None:
                 trajPosition = self.trajPosition
             return trajPosition
+
+    #def WriteSpawningStructureProt(self, path):
 
     def __eq__(self, other):
         return (self.pdb, self.elements, self.threshold, self.contacts) == (other.pdb, other.elements, other.threshold, other.contacts) and np.allclose(self.metrics, other.metrics)
@@ -606,8 +614,11 @@ class ContactsClusteringEvaluator(ClusteringEvaluator):
             :type contactThreshold: float
             :returns: bool, float -- Whether the structure belong to the cluster and the distance between them
         """
+        #here we have to modify the dictionary of the atoms so that an error is not raised
+        if pdb.atoms != cluster.pdb.atoms: #rename the dictionary
+            pdb.atoms = modify(pdb.atoms, cluster.pdb.atoms)
         dist = self.RMSDCalculator.computeRMSD(cluster.pdb, pdb)
-        return dist < cluster.threshold, dist
+        return dist >= cluster.threshold, dist
 
     def checkAttributes(self, pdb, resname, resnum, resChain, contactThresholdDistance):
         """
@@ -2030,3 +2041,54 @@ def loadReportFile(reportFile):
     """
     metrics = utilities.loadtxtfile(reportFile)
     return filterRepeatedReports(metrics)
+
+def modify(pdb_atoms,cluster_atoms):
+    res = list(cluster_atoms.keys())[0]
+    x = str(res).split(":")
+    num = int(x[0])
+    res2 = list(pdb_atoms.keys())[0]
+    x2 = str(res2).split(":")
+    num2 = int(x2[0])
+    diff = num-num2 #here print absolute value
+    new = {}
+    for key, value in pdb_atoms.items():
+        y = str(key).split(":")
+        y2 = int(y[0])
+        re = str(key)
+        rest = re.replace(y[0],"")
+        nw = y2 + diff
+        new[str(nw) + rest] = value
+    return new
+
+def protonate(path,tmpdir):
+    cwd = os.getcwd()
+    dire = os.path.join(tmpdir,"prot")
+    if not os.path.isdir(dire):
+        os.mkdir(dire)
+    filename = os.path.basename(path)
+    os.rename(path,os.path.join(dire,filename)) #this moves the structure to temp directory "prot"
+    os.chdir(dire)
+    name = filename
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", filename, "-omae", "0.mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", "0.mae",
+                     "0protonated.mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", "0protonated.mae", "-opdb",
+                     name])
+    rmv = glob.glob("*.log")+glob.glob("*.mae")
+    for f in rmv:
+        os.remove(os.path.join(dire,f))
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1/")
+    return name, dire
+
+def process(file,dire,tmpdir,outputFilename):
+    nom = os.path.basename(outputFilename)
+    os.chdir(dire)
+    file = os.path.join(dire,file)
+    protfile = ppp.main(file, dire)  # this preprocess the file after propka (check that after this it changes the name of variable file)
+    protfile = protfile[0]
+    #protfile = os.path.join(dire,os.path.basename(protfile))
+    os.rename(protfile,os.path.join(tmpdir,os.path.basename(file)))
+    os.remove(file)
+    name = os.path.join(tmpdir,os.path.basename(file))
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1")
+    return name

@@ -7,6 +7,8 @@ import glob
 import random
 import numpy as np
 import scipy.optimize as optim
+import subprocess
+import PPP.main as ppp
 from abc import abstractmethod
 from scipy.linalg import lu, solve
 from AdaptivePELE.constants import blockNames
@@ -355,9 +357,22 @@ class SpawningCalculator:
         for i, cluster in enumerate(clustering.clusters.clusters):
             for _ in range(int(degeneracyOfRepresentatives[i])):
                 outputFilename = tmpInitialStructuresTemplate % (iteration, counts)
-                print('Writing to ', outputFilename, 'cluster', i)
-                procMapping.append(cluster.writeSpawningStructure(outputFilename))
-
+                #print('Writing to ', outputFilename, 'cluster', i)
+                tmpdir = "/home/quiquevb23/Escriptori/Experiments/Exp_1/output/tmp/"
+                path = outputFilename
+                cluster.writePDB(outputFilename) #this needs to be here so the initial spawning structure is made (to be modified by propka)
+                #here we should put a if condition for creating the protonated files
+                file, dire = protonate(path,tmpdir)
+                protfile = process(file,dire,tmpdir,path)
+                #file = os.path.join(tmpdir,os.path.basename(file))
+                #newname = os.path.basename(outputFilename)
+                #file = ppp.main(file,tmpdir,output_pdb=os.path.join(tmpdir,newname)) #this preprocess the file after propka (check that after this it changes the name of variable file)
+                #file = file[0]
+                #os.remove(outputFilename)
+                #os.rename(file,os.path.join(tmpdir,newname))
+                #file = os.path.basename(outputFilename)
+                #file = os.path.join(tmpdir,file)
+                procMapping.append(cluster.writeSpawningStructure(protfile))
                 counts += 1
 
         print("counts & cluster centers", counts, np.where(np.array(degeneracyOfRepresentatives) > 0)[0].size)
@@ -1522,3 +1537,36 @@ class IndependentMSMCalculator(MSMCalculator):
                 snapshot from which the trajectories will start in the next iteration
         """
         return self.IndependentCalculator.writeSpawningInitialStructures(outputPathConstants, degeneracyOfRepresentatives, clustering, iteration, topologies)
+
+def protonate(path,tmpdir):
+    cwd = os.getcwd()
+    dire = os.path.join(tmpdir,"prot")
+    if not os.path.isdir(dire):
+        os.mkdir(dire)
+    filename = os.path.basename(path)
+    os.rename(path,os.path.join(dire,filename)) #this moves the structure to temp directory "prot"
+    os.chdir(dire)
+    name = filename
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", filename, "-omae", "0.mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", "0.mae",
+                     "0protonated.mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", "0protonated.mae", "-opdb",
+                     name])
+    rmv = glob.glob("*.log")+glob.glob("*.mae")
+    for f in rmv:
+        os.remove(os.path.join(dire,f))
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1/")
+    return name, dire
+
+def process(file,dire,tmpdir,outputFilename): #we need to eliminate extra lines in ligand
+    nom = os.path.basename(outputFilename)
+    os.chdir(dire)
+    file = os.path.join(dire,file)
+    protfile = ppp.main(file, dire)  # this preprocess the file after propka (check that after this it changes the name of variable file)
+    protfile = protfile[0]
+    #protfile = os.path.join(dire,os.path.basename(protfile))
+    os.rename(protfile,os.path.join(tmpdir,os.path.basename(file)))
+    os.remove(file)
+    name = os.path.join(tmpdir,os.path.basename(file))
+    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1")
+    return name

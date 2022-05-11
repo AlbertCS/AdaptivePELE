@@ -36,9 +36,9 @@ elif machine == "bscls309":
     DOCUMENTS_FOLDER = "/home/jgilaber/PELE-repo/Documents"
 
 else:
-    PELE_EXECUTABLE = None
-    DATA_FOLDER = None
-    DOCUMENTS_FOLDER = None
+    PELE_EXECUTABLE = "/home/quiquevb23/Escriptori/PELE/PELE/bin/PELE-1.7"
+    DATA_FOLDER = "/home/quiquevb23/Escriptori/Experiments/Data"
+    DOCUMENTS_FOLDER = "/home/quiquevb23/Escriptori/Experiments/Documents"
 
 
 inputFileTemplate = "{ \"files\" : [ { \"path\" : \"%s\" } ] }"
@@ -143,7 +143,7 @@ class OutputPathConstants():
     def buildConstants(self, outputPath):
         self.buildOutputPathConstants(outputPath)
 
-        self.tmpFolder = "tmp_" + outputPath.replace("/", "_")
+        self.tmpFolder = "/home/quiquevb23/Escriptori/Experiments/Exp_1/output/tmp"
 
         self.buildTmpFolderConstants(self.tmpFolder)
 

@@ -21,7 +21,7 @@ from AdaptivePELE.validator import controlFileValidator
 from AdaptivePELE.spawning import spawning, spawningTypes
 from AdaptivePELE.simulation import simulationrunner, simulationTypes
 from AdaptivePELE.clustering import clustering, clusteringTypes
-
+from AdaptivePELE.utilities.utilities import protonate, process, removelines
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Perform several iterations of"
@@ -440,6 +440,17 @@ def clusterEpochTrajs(clusteringMethod, epoch, epochOutputPathTempletized, topol
 """
 
     snapshotsJSONSelectionString = generateTrajectorySelectionString(epoch, epochOutputPathTempletized)
+    #hre we should put an if condition to protonate trajectories
+    outputdir = "/home/quiquevb23/Escriptori/Experiments/Exp_1/output/" #fix directory name
+    epochdir = os.path.join(outputdir,str(epoch))
+    traj = [f for f in os.listdir(epochdir) if f.endswith(".pdb")]
+    for f in traj:
+        name = f
+        path = os.path.join(epochdir,f)
+        name = protonate(path,epochdir)
+        #proctraj = process(prottraj,dire,name,epochdir)
+        #proctrajgoodlig = removelines(lig,proctraj,epochdir)
+
     paths = ast.literal_eval(snapshotsJSONSelectionString)
     if len(glob.glob(paths[-1])) == 0:
         sys.exit("No trajectories to cluster! Matching path:%s" % paths[-1])
@@ -682,7 +693,7 @@ def main(jsonParams, clusteringHook=None):
     cleanProcessesFiles(processManager.syncFolder)
 
     topologies = utilities.Topology(outputPathConstants.topologies)
-    if restart and firstRun is not None:
+    if restart and firstRun is not None: #this block imports the topologies (for doing a restart simulation)
         topology_files = glob.glob(os.path.join(outputPathConstants.topologies, "topology*.pdb"))
         topology_files.sort(key=utilities.getTrajNum)
         topologies.setTopologies(topology_files)
@@ -750,16 +761,16 @@ def main(jsonParams, clusteringHook=None):
         processManager.barrier()
         if processManager.isMaster():
             utilities.print_unbuffered("Production run...")
-        if not debug:
-            simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies, spawningCalculator.parameters.reportFilename, processManager)
+        if not debug:#the following is the line that fails when giving input of diff atoms
+           simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies, spawningCalculator.parameters.reportFilename, processManager)
         processManager.barrier()
 
-        if processManager.isMaster():
+        if processManager.isMaster(): #in here we need to process and protonate the trajectories
             if simulationRunner.parameters.postprocessing:
                 simulationRunner.processTrajectories(outputPathConstants.epochOutputPathTempletized % i, topologies, i)
             utilities.print_unbuffered("Clustering...")
             startTime = time.time()
-            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants)
+            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
             endTime = time.time()
             utilities.print_unbuffered("Clustering ligand: %s sec" % (endTime - startTime))
 

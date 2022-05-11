@@ -24,7 +24,7 @@ class GeneralParams:
         "initialStructures": "list",
         "debug": "bool",
         "writeAllClusteringStructures": "bool",
-        "nativeStructure": "basestring"
+        "nativeStructure": "basestring",
     }
 
 
@@ -205,7 +205,8 @@ class SimulationParams:
         "constraints": "list",
         "boxType": "basestring",
         "postprocessing": "bool",
-        "cylinderBases": "list"
+        "cylinderBases": "list",
+        "protonationStates": "bool"
     }
     exitCondition = {
         "types": {
