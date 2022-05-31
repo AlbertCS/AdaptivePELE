@@ -16,6 +16,7 @@ import mdtraj as md
 from scipy import linalg
 import PPP.main as ppp
 import subprocess
+from contextlib import contextmanager
 
 try:
     import cPickle as pickle
@@ -1043,12 +1044,51 @@ def get_file_extension(full_path):
     _, ext = get_file_name_extension(full_path)
     return ext
 
+@contextmanager
+def suppress_stdout():
+    with open(os.devnull, "w") as devnull:
+        old_stdout = sys.stdout
+        sys.stdout = devnull
+        try:
+            yield
+        finally:
+            sys.stdout = old_stdout
+
+
+def protmodels(model, trajnum, lengthlig):
+    dire = os.getcwd()
+    name = os.path.basename(model)
+    model = os.path.join(dire, model)
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", str(name) + ".mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", str(name) + ".mae",
+                     str(name) + "protonated.mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name) + "protonated.mae", "-opdb",
+                     name])
+
+    i = name.split("_")[2]
+    with open("%s_model_%s" % (trajnum, i), "r") as model:
+        with open("%s_model_0%s" % (trajnum, i), "a+") as model0:  # new model corrected with ligand included
+            for line in model:
+                if not line.startswith("TER") and not line.startswith("HETATM") and not line.startswith(
+                        "CONECT") and not line.startswith("END"):
+                    model0.write(line)
+            with open("lig", "r") as lig:
+                liglines = lig.readlines()
+                start, stop = (int(i) * lengthlig - lengthlig), (int(i) * lengthlig - 1)
+                for j in range(start, stop + 1):
+                    model0.write(liglines[j])
+
 
 def protonate(path,epochdir):
     dire = os.path.join(epochdir,"prot")
+    cwd = os.getcwd()
     if not os.path.isdir(dire):
         os.mkdir(dire)
     filename = os.path.basename(path)
+    for m in filename:
+        if m.isdigit():
+            trajnum = m
+    print("Processing trajectory %s" % (trajnum))
     os.rename(path,os.path.join(dire,filename)) #this moves the structure to temp directory "prot"
     os.chdir(dire)
     #the following will take the proper ligand atoms
@@ -1056,65 +1096,86 @@ def protonate(path,epochdir):
     with open(filetoopen) as traj:
         with open("lig","w") as lig:
             nre = 0
-            count = 0
-            lines = traj.readlines()
-            for line in lines:
-                if line.startswith("HETATM"):
+            liglen = 0
+            for line in traj:
+                if line.startswith("HETATM") and line.split()[3] == "LIG":
                     lig.write(line)
-                    count += 1
+                    liglen += 1
                 elif line.startswith("ENDMDL"):
                     nre += 1
-                else:
-                    continue
-        modelength = len(lines)
-        linespermodel = modelength//nre
-        lengthlig = count//nre
+
+        lengthlig = liglen//nre
 
     for i in range(1,int(nre)+1):
-       with open("model_%s" % i,"a+") as model, open(filetoopen) as traj:
-            lines = traj.readlines()
-            linestowrite = lines[(linespermodel*i-linespermodel):(linespermodel*i)]
-            for line in linestowrite:
-                model.write(line)
-       model = "model_%s" % i
-       model = os.path.basename(model)
-       name = model
+       with open("%s_model_%s" % (trajnum,i),"a+") as model, open(filetoopen) as traj:
+            for line in traj:
+                if not line.startswith("ENDMDL"):
+                    model.write(line)
+                if line.startswith("ENDMDL"):
+                    break
+
+    '''
+    models = glob.glob(os.path.join(dire,"%s_model*" % (trajnum)), recursive = True)
+    nb_workers = int(len(os.sched_getaffinity(0)))
+    with mp.Pool(nb_workers) as p:
+        # p.apply_async(partial(protmodels, trajnum=trajnum, lengthlig=lengthlig), models)
+        p.apply_async(protmodels, (models, trajnum, lengthlig), )
+    '''
+
+    '''
+    models = glob.glob(os.path.join(dire, "%s_model*" % (trajnum)), recursive=True)
+    for model in models: #this for loop can be parallelized
+       name = os.path.basename(model)
        model = os.path.join(dire,model)
-       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", "0.mae"])
-       subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", "0.mae",
-                                    "0protonated.mae"])
-       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", "0protonated.mae", "-opdb",
+       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", str(name)+".mae"])
+       subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", str(name)+".mae",
+                                    str(name)+"protonated.mae"])
+       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name)+"protonated.mae", "-opdb",
                                     name])
-       with open("model_%s" % i,"r") as model:
-           with open("model_0%s" % i,"a+") as model0:
-               lines = model.readlines()
-               for line in lines:
+
+       i = name.split("_")[2]
+       with open("%s_model_%s" % (trajnum,i),"r") as model:
+           with open("%s_model_0%s" % (trajnum,i),"a+") as model0: #new model corrected with ligand included
+               for line in model:
                    if not line.startswith("TER") and not line.startswith("HETATM") and not line.startswith("CONECT") and not line.startswith("END"):
                        model0.write(line)
-           with open("model_0%s" % i,"a") as model0:
                with open("lig","r") as lig:
                    liglines = lig.readlines()
-                   start, stop = (i*lengthlig-lengthlig), (i*lengthlig-1)
+                   start, stop = (int(i)*lengthlig-lengthlig), (int(i)*lengthlig-1)
                    for j in range(start,stop+1):
                        model0.write(liglines[j])
+    '''
+
+    models = glob.glob(os.path.join(dire, "%s_model*" % (trajnum)), recursive=True)
+    p = mp.Pool(len(models))
+    results = []
+    with suppress_stdout():
+        for model in models:
+            result = p.apply_async(protmodels, (model, trajnum, lengthlig))
+            results.append(result)
+        [result.wait() for result in results]
+
     rmv = glob.glob("*.log")+glob.glob("*.mae")
     for f in rmv:
         os.remove(os.path.join(dire,f))
-    filestomerge = glob.glob("model_0*")
+    #now it comes preprocessing with PPP
+    filestomerge = glob.glob("%s_model_0*" % (trajnum))
     for f in filestomerge:
-        num = int(f.split('_')[1])
+        num = int(f.split('_')[2])
         os.rename(f,f + '.pdb')
         file = os.path.join(dire,f + '.pdb')
-        protfile = ppp.main(file,dire)
-        protfile = protfile[0]
-        with open(protfile) as j:
-            with open("p" + str(num) + "_" + os.path.basename(f),"w+") as good:
+        out = [os.path.join(dire,f + '_processed.pdb')] #we need to create a list because ppp.main processes output pdb as first element of a list
+        with suppress_stdout():
+            ppp.main(file,dire,out)
+        with open(out[0]) as j:
+            with open("p" + "_" + os.path.basename(f) + ".pdb","w+") as good:
                 good.write("MODEL"+"     "+str(num)+"\n")
                 for line in j:
                     good.write(line)
                 good.write("ENDMDL\n\n")
 
     merge = glob.glob("p*")
+    merge.sort()
     os.remove(filetoopen)
     with open(filetoopen, "a") as traj:
         for f in merge:
@@ -1127,51 +1188,12 @@ def protonate(path,epochdir):
     files = glob.glob(dire+"/*")
     for f in files:
         os.remove(f)
-    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1/")
+    os.chdir(cwd)
     return name
 
-def process(file,dire,name,epochdir): # we need to eliminate extra lines in ligand
-    os.chdir(dire)
-    file = os.path.join(dire,file)
-    protfile = ppp.main(file, dire)  # this preprocess the file after propka (check that after this it changes the name of variable file)
-    protfile = protfile[0]
-    #protfile = os.path.join(dire,os.path.basename(protfile))
-    os.rename(protfile,os.path.join(epochdir,name))
-    os.remove(file)
-    procname = os.path.join(epochdir,name)
-    os.chdir("/home/quiquevb23/Escriptori/Experiments/Exp_1")
-    return procname
-
-def removelines(lig,filename,epochdir):
-
-    ligmal = []
-    withoutlig = []
-    # now we have the ligand and the length, so we can change the numeration
-    with open(filename) as file:
-        lines = file.readlines()
-        for line in lines:
-            if line.startswith("HETATM"):
-                ligmal.append(line)
-            if not line.startswith("TER") and not line.startswith("HETATM"):
-                withoutlig.append(line)
-    length2 = len(ligmal)
-    if length2 > length:
-        rest = length2 - length
-    elif length > length2:
-        rest = length - length2
-
-    newlig = ligmal[:-rest]
-
-    with open(os.path.join(epochdir,"0protonatedgood.pdb")) as file2:
-        for i in withoutlig:
-            f.write(i)
-        file2.write("TER\n")
-        for i in newlig:
-            f.write(i)
-        file2.write("TER\n")
-    os.rename(os.path.join(epochdir,"0protonatedgood.pdb"),filename)
-    correctprotein = filename
-
-    return correctprotein
-
-
+def varprot(simulationrunnerBlock): #this function checks if variableprot is used
+    val = list(simulationrunnerBlock.values())
+    val = val[1]
+    for key in val:
+        if key == "variableProtStates":
+            return val[key]

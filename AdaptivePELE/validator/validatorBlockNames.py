@@ -206,7 +206,7 @@ class SimulationParams:
         "boxType": "basestring",
         "postprocessing": "bool",
         "cylinderBases": "list",
-        "protonationStates": "bool"
+        "variableProtStates": "bool"
     }
     exitCondition = {
         "types": {

@@ -143,7 +143,7 @@ class OutputPathConstants():
     def buildConstants(self, outputPath):
         self.buildOutputPathConstants(outputPath)
 
-        self.tmpFolder = "/home/quiquevb23/Escriptori/Experiments/Exp_1/output/tmp"
+        self.tmpFolder = "tmp_"
 
         self.buildTmpFolderConstants(self.tmpFolder)
 

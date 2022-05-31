@@ -21,7 +21,13 @@ from AdaptivePELE.validator import controlFileValidator
 from AdaptivePELE.spawning import spawning, spawningTypes
 from AdaptivePELE.simulation import simulationrunner, simulationTypes
 from AdaptivePELE.clustering import clustering, clusteringTypes
-from AdaptivePELE.utilities.utilities import protonate, process, removelines
+from AdaptivePELE.utilities.utilities import protonate, suppress_stdout, varprot
+try:
+    import multiprocessing as mp
+    PARALLELIZATION = True
+except:
+    ImportError
+    PARALLELIZATION = False
 
 def parseArgs():
     parser = argparse.ArgumentParser(description="Perform several iterations of"
@@ -423,7 +429,7 @@ def needToRecluster(oldClusteringMethod, newClusteringMethod):
         return oldClusteringMethod.similarityEvaluator.typeEvaluator != newClusteringMethod.similarityEvaluator.typeEvaluator
 
 
-def clusterEpochTrajs(clusteringMethod, epoch, epochOutputPathTempletized, topologies, outputPathConstants=None):
+def clusterEpochTrajs(varprotstates,clusteringMethod, epoch, epochOutputPathTempletized, topologies, outputPathConstants=None):
     """
         Cluster the trajecotories of a given epoch
 
@@ -440,21 +446,20 @@ def clusterEpochTrajs(clusteringMethod, epoch, epochOutputPathTempletized, topol
 """
 
     snapshotsJSONSelectionString = generateTrajectorySelectionString(epoch, epochOutputPathTempletized)
-    #hre we should put an if condition to protonate trajectories
-    outputdir = "/home/quiquevb23/Escriptori/Experiments/Exp_1/output/" #fix directory name
-    epochdir = os.path.join(outputdir,str(epoch))
-    traj = [f for f in os.listdir(epochdir) if f.endswith(".pdb")]
-    for f in traj:
-        name = f
-        path = os.path.join(epochdir,f)
-        name = protonate(path,epochdir)
-        #proctraj = process(prottraj,dire,name,epochdir)
-        #proctrajgoodlig = removelines(lig,proctraj,epochdir)
-
-    paths = ast.literal_eval(snapshotsJSONSelectionString)
+    if varprotstates is True:
+        cwd = os.getcwd()
+        outputdir = os.path.join(cwd,"output")
+        epochdir = os.path.join(outputdir,str(epoch))
+        traj = [f for f in os.listdir(epochdir) if f.endswith(".pdb")]
+        for f in traj:
+            name = f
+            path = os.path.join(epochdir,f)
+            protonate(path,epochdir)
+    paths = ast.literal_eval(snapshotsJSONSelectionString) #this might be the line that causes the warning message
     if len(glob.glob(paths[-1])) == 0:
         sys.exit("No trajectories to cluster! Matching path:%s" % paths[-1])
-    clusteringMethod.cluster(paths, topology=topologies, epoch=epoch, outputPathConstants=outputPathConstants)
+    with suppress_stdout():
+        clusteringMethod.cluster(paths, topology=topologies, epoch=epoch, outputPathConstants=outputPathConstants)
 
 
 def clusterPreviousEpochs(clusteringMethod, finalEpoch, epochOutputPathTempletized, simulationRunner, topologies, outputPathConstants=None):
@@ -477,7 +482,7 @@ def clusterPreviousEpochs(clusteringMethod, finalEpoch, epochOutputPathTempletiz
     for i in range(finalEpoch):
         simulationRunner.readMappingFromDisk(epochOutputPathTempletized % i)
         topologies.readMappingFromDisk(epochOutputPathTempletized % i, i)
-        clusterEpochTrajs(clusteringMethod, i, epochOutputPathTempletized, topologies, outputPathConstants)
+        clusterEpochTrajs(clusteringMethod, i, epochOutputPathTempletized, topologies, outputPathConstants, varprotstates=None)
 
 
 def getWorkingClusteringObjectAndReclusterIfNecessary(firstRun, outputPathConstants, clusteringBlock, spawningParams, simulationRunner, topologies, processManager):
@@ -770,7 +775,8 @@ def main(jsonParams, clusteringHook=None):
                 simulationRunner.processTrajectories(outputPathConstants.epochOutputPathTempletized % i, topologies, i)
             utilities.print_unbuffered("Clustering...")
             startTime = time.time()
-            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
+            varprotstates = varprot(simulationrunnerBlock)
+            clusterEpochTrajs(varprotstates, clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
             endTime = time.time()
             utilities.print_unbuffered("Clustering ligand: %s sec" % (endTime - startTime))
 
