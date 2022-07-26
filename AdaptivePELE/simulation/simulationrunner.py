@@ -17,6 +17,11 @@ from AdaptivePELE.constants import constants, blockNames
 from AdaptivePELE.simulation import simulationTypes
 from AdaptivePELE.atomset import atomset, RMSDCalculator
 from AdaptivePELE.utilities import utilities, PDBLoader
+from AdaptivePELE.utilities.utilities import suppress_stdout, prottmp, gettmpdir, makeepochreport, appendreport
+from functools import partial
+
+import re
+
 SKLEARN = True
 OPENMM = True
 MDANALYSIS = True
@@ -394,8 +399,9 @@ class PeleSimulation(SimulationRunner):
         trajNum = int(metrics[SASAcluster, -2])
         snapshotNum = int(metrics[SASAcluster, -1])
         snapshot = utilities.getSnapshots(os.path.join(outputFolder, self.parameters.trajectoryName % trajNum))[snapshotNum]
-        snapshotPDB = atomset.PDB()
-        snapshotPDB.initialise(snapshot, resname=resname, chain=reschain, resnum=resnum, topology=topologies.getTopology(epoch, trajNum))
+        with suppress_stdout():
+            snapshotPDB = atomset.PDB()
+            snapshotPDB.initialise(snapshot, resname=resname, chain=reschain, resnum=resnum, topology=topologies.getTopology(epoch, trajNum))
         self.parameters.boxCenter = str(snapshotPDB.getCOM())
         return
 
@@ -429,7 +435,8 @@ class PeleSimulation(SimulationRunner):
         # trajectories because it was assumed that initial structures would
         # still be pdbs
         PDBinitial = atomset.PDB()
-        PDBinitial.initialise(initialStruct, resname=resname, chain=reschain, resnum=resnum)
+        with suppress_stdout(): #we put this here so that no WARNING message is printed
+            PDBinitial.initialise(initialStruct, resname=resname, chain=reschain, resnum=resnum)
         return repr(PDBinitial.getCOM())
 
     def generatePELECommand(self, runningControlFile):
@@ -466,7 +473,7 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE equilibration took %.2f sec" % (endTime - startTime))
 
-    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager):
+    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, varprotStates, restart):
         """
             Run a short PELE simulation
 
@@ -484,6 +491,34 @@ class PeleSimulation(SimulationRunner):
             :type processManager: :py:class:`.ProcessesManager`
         """
         trajName = "".join(self.parameters.trajectoryName.split("_%d"))
+        if varprotStates is True and epoch == 0 and restart is False: #clean previous log file
+            outpath = os.path.split(processManager.syncFolder)[0]
+            logfile = os.path.join(outpath, "VarProt.log")
+            if os.path.exists(logfile):
+                os.remove(logfile)
+
+        if varprotStates is True and epoch != 0:
+            paths = [x.strip() for x in initialStructuresAsString.split("\n")]
+            paths = list(filter(None,paths))
+            inputtoprotonate = [] #list containing all files in tmp directory to be processed by propka
+            for path in paths:
+                n = path.split(":")
+                n = n[2]
+                n = re.sub(r'[^A-Za-z0-9/_.]+', '', n)
+                inputtoprotonate.append(n)
+
+            tmppath = gettmpdir(n) #here we get tmpdir
+
+#cd            for path in inputtoprotonate: #use this and comment the next block for debug
+#                prottmp(path, epoch)
+
+            with suppress_stdout():
+                pool = mp.Pool(len(inputtoprotonate))
+                funct = partial(prottmp, epoch=epoch) #parallelize the protonation of all inputs in tmp/ directory
+                pool.map(funct, inputtoprotonate)
+                pool.close()
+                pool.join()
+
         ControlFileDictionary = {"COMPLEXES": initialStructuresAsString,
                                  "PELE_STEPS": self.parameters.peleSteps,
                                  "BOX_RADIUS": self.parameters.boxRadius,
@@ -492,7 +527,7 @@ class PeleSimulation(SimulationRunner):
         self.prepareControlFile(epoch, outputPathConstants, ControlFileDictionary)
         self.createSymbolicLinks()
         runningControlFile = outputPathConstants.tmpControlFilename % epoch
-        toRun = self.generatePELECommand(runningControlFile)
+        toRun = self.generatePELECommand(runningControlFile) #in this line trajectories are created
 
         utilities.print_unbuffered(" ".join(toRun))
         startTime = time.time()
@@ -515,6 +550,10 @@ class PeleSimulation(SimulationRunner):
 
         endTime = time.time()
         utilities.print_unbuffered("PELE took %.2f sec" % (endTime - startTime))
+
+        if varprotStates is True and epoch != 0:
+            makeepochreport(epoch) #this makes report for each epoch with protonation changes in trajectory files
+            appendreport(epoch) #this appends each epoch report to global log file
 
     def getEquilibrationControlFile(self, peleControlFileDict):
         """

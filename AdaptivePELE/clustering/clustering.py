@@ -609,7 +609,8 @@ class ContactsClusteringEvaluator(ClusteringEvaluator):
         """
         #here we have to modify the dictionary of the atoms so that an error is not raised
         if pdb.atoms != cluster.pdb.atoms: #rename the dictionary
-            pdb.atoms = modify(pdb.atoms, cluster.pdb.atoms)
+            #pdb.atoms, pdb.atomList = modify2(cluster.pdb, pdb)
+            cluster.pdb.atoms, cluster.pdb.atomList = modify2(cluster.pdb, pdb)
         dist = self.RMSDCalculator.computeRMSD(cluster.pdb, pdb)
         return dist >= cluster.threshold, dist
 
@@ -933,6 +934,17 @@ class Clustering(object):
         box_radius = simulationRunnerParams.boxRadius
         clustersFiltered = []
         clustersSelected = []
+
+        '''#this line might be useful
+        for cluster in self.clusters:
+            atoms = list(cluster.pdb.atoms)
+            atomlist = list(cluster.pdb.atomList)
+            atomsvalues = list(cluster.pdb.atoms.values())
+            if atoms[0] != atomlist[0]:
+                newdic = dict(zip(atomlist, atomsvalues))
+                cluster.pdb.atoms = newdic
+        '''
+
         for cluster in self.clusters:
             if utilities.distanceCOM(box_center, cluster.pdb.getCOM()) < (box_radius-1):
                 clustersFiltered.append(cluster)
@@ -1111,10 +1123,13 @@ class Clustering(object):
         pdb.initialise(snapshot, resname=self.resname, resnum=self.resnum, chain=self.resChain, topology=topology)
         self.clusteringEvaluator.cleanContactMap()
         for clusterNum, cluster in enumerate(self.clusters.clusters):
+            if pdb.atoms != cluster.pdb.atoms:  # rename the dictionary
+                pdb.atoms, pdb.atomList = modify2(cluster.pdb, pdb) #this line modifies pdb so it matches prior cluster (use first commented lines in modify2)
+                #cluster.pdb.atoms, cluster.pdb.atomList = modify2(cluster.pdb, pdb) #this line modifies cluster so it matches actual pdb
             scd = atomset.computeSquaredCentroidDifference(cluster.pdb, pdb)
             if scd > self.clusteringEvaluator.getInnerLimit(cluster):
                 continue
-
+            #if cluster and pdb not similar modify the
             isSimilar, dist = self.clusteringEvaluator.isElement(pdb, cluster,
                                                                  self.resname, self.resnum,
                                                                  self.resChain, self.contactThresholdDistance)
@@ -2051,4 +2066,97 @@ def modify(pdb_atoms,cluster_atoms):
         rest = re.replace(y[0],"")
         nw = y2 + diff
         new[str(nw) + rest] = value
-    return new
+    newlist = []
+    for key in new:
+        newlist.append(key)
+    return new, newlist
+
+def modify2(cluster, pdb):
+    '''
+    length = len(cluster.atomList)
+    newlist = []
+    for i in range(0, length):
+        newlist.append(pdb.atomList[i])
+    pdbkeys = list(pdb.atoms.keys())
+    pdbvalues = list(pdb.atoms.values())
+    newkeys = []
+    newvalues = []
+    for i in range(0, length):
+        newkeys.append(pdbkeys[i])
+        newvalues.append(pdbvalues[i])
+    newdic = dict(zip(newkeys, newvalues))
+    '''
+
+
+    oldkeys = list(pdb.atoms.keys())
+    pdbkeys = list(cluster.atoms.keys())
+    pdbvalues = list(cluster.atoms.values())
+    newdic = dict(zip(pdbkeys, pdbvalues))
+    newlist = pdbkeys
+    #we also modify the string containing pdb
+    pdbstring = pdb.pdb.split("\n")
+    clusterstring = cluster.pdb.split("\n")
+    i = 0
+    newstring = []
+    for line in pdbstring:
+        #if i == len(pdbkeys):
+        #    break
+        elements = line.split()
+        lenghtline = len(elements)
+        if i < len(pdbkeys):
+            keytoreplace = oldkeys[i].split(":")
+            newkey = pdbkeys[i].split(":")
+        if lenghtline > 1 and elements[1] == keytoreplace[0]:
+            n = line.replace(str(keytoreplace[0]),str(newkey[0]))
+            i += 1
+            newstring.append(str(n))
+        else:
+            newstring.append(str(line))
+
+    pdb.pdb = "\n".join(str(e) for e in newstring)
+
+    return newdic, newlist
+
+
+    '''
+    oldkeys = list(cluster.atoms.keys())
+    pdbkeys = list(pdb.atoms.keys())
+    pdbvalues = list(pdb.atoms.values())
+    newdic = dict(zip(pdbkeys, pdbvalues))
+    newlist = pdbkeys
+    # we also modify the string containing pdb
+    pdbstring = cluster.pdb.split("\n")
+    clusterstring = pdb.pdb.split("\n")
+    i = 0
+    newstring = []
+    heavyatomspdb = []
+    for e in pdbkeys:
+        heavyatomspdb.append(e)
+    for line in pdbstring:
+        # if i == len(pdbkeys):
+        #    break
+        elements = line.split()
+        lenghtline = len(elements)
+        if i < len(pdbkeys):
+            try:
+                keytoreplace = oldkeys[i].split(":")
+                newkey = pdbkeys[i].split(":")
+            except IndexError:
+                pass
+        if lenghtline > 1 and elements[1] == keytoreplace[0]:
+            try:
+                n = line.replace(str(keytoreplace[0]), str(newkey[0]))
+                i += 1
+                newstring.append(str(n))
+            except IndexError:
+                pass
+        else:
+            try:
+                newstring.append(str(line))
+            except IndexError:
+                pass
+
+    cluster.pdb = "\n".join(str(e) for e in newstring)
+
+    return newdic, newlist
+    '''

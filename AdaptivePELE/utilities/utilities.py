@@ -17,7 +17,9 @@ from scipy import linalg
 import PPP.main as ppp
 import subprocess
 from contextlib import contextmanager
-
+import itertools
+import re
+from difflib import Differ
 try:
     import cPickle as pickle
 except ImportError:
@@ -1054,146 +1056,276 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
+def varprot(simulationrunnerBlock):
+    """
+        Check if variableprot flag is used
 
-def protmodels(model, trajnum, lengthlig):
-    dire = os.getcwd()
-    name = os.path.basename(model)
-    model = os.path.join(dire, model)
-    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", str(name) + ".mae"])
-    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", str(name) + ".mae",
-                     str(name) + "protonated.mae"])
-    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name) + "protonated.mae", "-opdb",
-                     name])
-
-    i = name.split("_")[2]
-    with open("%s_model_%s" % (trajnum, i), "r") as model:
-        with open("%s_model_0%s" % (trajnum, i), "a+") as model0:  # new model corrected with ligand included
-            for line in model:
-                if not line.startswith("TER") and not line.startswith("HETATM") and not line.startswith(
-                        "CONECT") and not line.startswith("END"):
-                    model0.write(line)
-            with open("lig", "r") as lig:
-                liglines = lig.readlines()
-                start, stop = (int(i) * lengthlig - lengthlig), (int(i) * lengthlig - 1)
-                for j in range(start, stop + 1):
-                    model0.write(liglines[j])
-
-
-def protonate(path,epochdir):
-    dire = os.path.join(epochdir,"prot")
-    cwd = os.getcwd()
-    if not os.path.isdir(dire):
-        os.mkdir(dire)
-    filename = os.path.basename(path)
-    for m in filename:
-        if m.isdigit():
-            trajnum = m
-    print("Processing trajectory %s" % (trajnum))
-    os.rename(path,os.path.join(dire,filename)) #this moves the structure to temp directory "prot"
-    os.chdir(dire)
-    #the following will take the proper ligand atoms
-    filetoopen = os.path.join(dire, filename)
-    with open(filetoopen) as traj:
-        with open("lig","w") as lig:
-            nre = 0
-            liglen = 0
-            for line in traj:
-                if line.startswith("HETATM") and line.split()[3] == "LIG":
-                    lig.write(line)
-                    liglen += 1
-                elif line.startswith("ENDMDL"):
-                    nre += 1
-
-        lengthlig = liglen//nre
-
-    for i in range(1,int(nre)+1):
-       with open("%s_model_%s" % (trajnum,i),"a+") as model, open(filetoopen) as traj:
-            for line in traj:
-                if not line.startswith("ENDMDL"):
-                    model.write(line)
-                if line.startswith("ENDMDL"):
-                    break
-
-    '''
-    models = glob.glob(os.path.join(dire,"%s_model*" % (trajnum)), recursive = True)
-    nb_workers = int(len(os.sched_getaffinity(0)))
-    with mp.Pool(nb_workers) as p:
-        # p.apply_async(partial(protmodels, trajnum=trajnum, lengthlig=lengthlig), models)
-        p.apply_async(protmodels, (models, trajnum, lengthlig), )
-    '''
-
-    '''
-    models = glob.glob(os.path.join(dire, "%s_model*" % (trajnum)), recursive=True)
-    for model in models: #this for loop can be parallelized
-       name = os.path.basename(model)
-       model = os.path.join(dire,model)
-       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", model, "-omae", str(name)+".mae"])
-       subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-WAIT", "-propka_pH", "7.00", str(name)+".mae",
-                                    str(name)+"protonated.mae"])
-       subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name)+"protonated.mae", "-opdb",
-                                    name])
-
-       i = name.split("_")[2]
-       with open("%s_model_%s" % (trajnum,i),"r") as model:
-           with open("%s_model_0%s" % (trajnum,i),"a+") as model0: #new model corrected with ligand included
-               for line in model:
-                   if not line.startswith("TER") and not line.startswith("HETATM") and not line.startswith("CONECT") and not line.startswith("END"):
-                       model0.write(line)
-               with open("lig","r") as lig:
-                   liglines = lig.readlines()
-                   start, stop = (int(i)*lengthlig-lengthlig), (int(i)*lengthlig-1)
-                   for j in range(start,stop+1):
-                       model0.write(liglines[j])
-    '''
-
-    models = glob.glob(os.path.join(dire, "%s_model*" % (trajnum)), recursive=True)
-    p = mp.Pool(len(models))
-    results = []
-    with suppress_stdout():
-        for model in models:
-            result = p.apply_async(protmodels, (model, trajnum, lengthlig))
-            results.append(result)
-        [result.wait() for result in results]
-
-    rmv = glob.glob("*.log")+glob.glob("*.mae")
-    for f in rmv:
-        os.remove(os.path.join(dire,f))
-    #now it comes preprocessing with PPP
-    filestomerge = glob.glob("%s_model_0*" % (trajnum))
-    for f in filestomerge:
-        num = int(f.split('_')[2])
-        os.rename(f,f + '.pdb')
-        file = os.path.join(dire,f + '.pdb')
-        out = [os.path.join(dire,f + '_processed.pdb')] #we need to create a list because ppp.main processes output pdb as first element of a list
-        with suppress_stdout():
-            ppp.main(file,dire,out)
-        with open(out[0]) as j:
-            with open("p" + "_" + os.path.basename(f) + ".pdb","w+") as good:
-                good.write("MODEL"+"     "+str(num)+"\n")
-                for line in j:
-                    good.write(line)
-                good.write("ENDMDL\n\n")
-
-    merge = glob.glob("p*")
-    merge.sort()
-    os.remove(filetoopen)
-    with open(filetoopen, "a") as traj:
-        for f in merge:
-            with open(f) as fil:
-                for line in fil:
-                    traj.write(line)
-
-    os.rename(filetoopen,os.path.join(epochdir,filename))
-    name = os.path.join(epochdir,filename)
-    files = glob.glob(dire+"/*")
-    for f in files:
-        os.remove(f)
-    os.chdir(cwd)
-    return name
-
-def varprot(simulationrunnerBlock): #this function checks if variableprot is used
+        :param simulationrunnerBlock:
+        :type simulationrunnerBlock: str
+    """
+    #this function checks if variableprot flag is used
     val = list(simulationrunnerBlock.values())
     val = val[1]
     for key in val:
         if key == "variableProtStates":
             return val[key]
+
+def protinp(filetoopen):
+    """
+            Processes file with PROPKA either using PREPWIZARD or PROTASSIGN:
+            - In the case of prepwizard, input file can be pdb directly
+            - If PROTASSIGN is used, only .mae files can be used so pdbconvert is also applied
+            IMPORTANT:
+            - Check if current version of schrodinger works
+
+    """
+    name = os.path.basename(filetoopen)
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", filetoopen, "-omae", str(name) + ".mae"])
+    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-nowater", "-propka_pH", "7.00", "-WAIT", str(name) + ".mae",
+                     str(name) + "protonated.mae"])
+#    subprocess.call(
+#        ["/opt/schrodinger2022-2/utilities/prepwizard", "-noepik", "-noimpref", "-nohtreat",
+#         "-propka_pH", "7.00", "-WAIT", filetoopen, "prot_" + name])
+
+    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name) + "protonated.mae", "-opdb",
+                     "prot_" + name])
+
+    return name
+
+def prottmp(path, epoch):
+    cwd = os.getcwd()
+    tmpdir = path.split("/")[0]
+    dire = os.path.join(tmpdir, "prot")
+    if not os.path.isdir(dire):
+        os.makedirs(dire, exist_ok=True)
+    filename = os.path.basename(path)
+    num = []
+    for m in filename:
+        if m.isdigit():
+            num.append(m)
+    num = num[1]
+    os.rename(path, os.path.join(dire, filename))  # this moves the structure to temp directory "prot"
+    os.chdir(dire)
+    # the following will retrieve the proper ligand atoms (HETATM lines)
+    dire = os.path.abspath(os.path.dirname(filename))
+    filetoopen = os.path.join(dire, filename)
+    with open(filetoopen) as traj:
+        with open("lig_%s_%s" % (epoch, num), "w") as lig:
+            with open("remark_%s_%s" % (epoch, num), "w") as remark:
+                l = 0
+                liglen = 0
+                for line in traj:
+                    l += 1
+                    if line.startswith("REMARK") or line.startswith("MODEL"):
+                        remark.write(line)
+                    try:
+                        if line.split()[3] == "LIG":
+                            lig.write(line)
+                            liglen += 1
+                    except IndexError:
+                        pass
+
+                    '''
+                    elif line.startswith("TER") and prevline:
+                        lig.write(line)
+                    elif line.startswith("TER"):
+                        prevline = True
+                    else:
+                        prevline = False
+                    '''
+    '''
+    if we are in epoch 0 and there are GLH or ASH, do not execute prepareforpropka. We need to record that if the initial structure contains ASH or GLH do not change it never along the simulation 
+    we should set a variable that is modify:true or false and if false do not execute the function (when GLH or ASH are present in the beginning)
+    '''
+    prepfile = prepareforpropka(filetoopen, dire) #we will use this function to rename titrable residues (ASH, GLH) to ASP and GLU to avoid errors with PROPKA
+    filetoopen = os.path.join(dire, prepfile)
+    filename2 = protinp(filetoopen) #this function processes file with PROPKA
+    #filetoopen2 = ("%s_%s" % (epoch, filename))
+    '''
+    rmv = glob.glob("*.log")+glob.glob("*.mae")
+    for f in rmv:
+        os.remove(os.path.join(dire,f))
+    '''
+    #now it comes preprocessing with PPP
+    #file = os.path.join(dire, filetoopen2)
+    filetoopen2 = "prot_" + filename2
+    file = os.path.join(dire, filetoopen2)
+    out = filetoopen2.replace(".pdb", '_processed.pdb') #we need to create a list because ppp.main processes output pdb as first element of a list
+    out = [os.path.join(dire, out)]
+    with suppress_stdout():
+        ppp.main(file, dire, out)
+    tmpdir = os.path.join(cwd, tmpdir)
+    #file = out[0]
+    file = os.path.basename(out[0])
+    l2 = 0
+    with open(file, "r") as f:
+        with open(os.path.join(dire, "p"+filename), "a+") as good:
+            with open("remark_%s_%s" % (epoch, num), "r") as remark:
+                with open("lig_%s_%s" % (epoch, num), "r") as lig:
+                    for line in remark:
+                        good.write(line)
+                        l2 += 1
+                    for line in f:
+                        try:
+                            if not line.split()[3] == "LIG":
+                                good.write(line)
+                                l2 += 1
+                        except IndexError:
+                            good.write(line) #write TER lines
+                            pass
+                    for line in lig:
+                        good.write(line)
+                    good.write("TER\n")
+#    if l2-1 != l:
+#        writereport(filetoopen, dire, filename, num, epoch)
+    os.rename(os.path.join(dire, "p" + filename), os.path.join(tmpdir, filename))
+    name = os.path.join(tmpdir, filename)
+    os.chdir(cwd)
+    return name
+
+def gettmpdir(n):
+    tmpdir = n.split("/")[0]
+    cwd = os.getcwd()
+    temppath = os.path.join(cwd, tmpdir)
+    return temppath
+
+
+def makeepochreport(epoch):
+    cwd = os.getcwd()
+    outputdir = os.path.join(cwd, "output")
+    epochdir = os.path.join(outputdir, str(epoch))
+    os.chdir(epochdir)
+    trajectories = glob.glob("trajectory*")
+    reports = []
+    dire = "Report"
+    if not os.path.isdir(dire):
+        os.mkdir(dire)
+    for traj in trajectories: #we first need to check how many models per trajectory
+        checkmodels(traj, epoch, epochdir)
+    repdir = os.path.join(epochdir, dire)
+    for reps in os.listdir(repdir):
+        if reps.startswith("report_"):
+            reports.append(reps)
+    differences = []
+    for rep1, rep2 in itertools.combinations(reports, 2):
+        with open(os.path.join(repdir,rep1), "r") as r1, open(os.path.join(repdir,rep2), "r") as r2:
+            differ = Differ()
+            differences.append("Diff between %s and %s\n" % (rep1, rep2))
+            for line in differ.compare(r1.readlines(), r2.readlines()):
+                differences.append(line)
+    newdiff = []
+    for l in differences:
+        if l.startswith("diff") or l.startswith("+") or l.startswith("-"):
+            if l.lstrip("+-") not in newdiff:
+                newdiff.append(l.lstrip("+-"))
+    with open("Report_Epoch_%s" % epoch, "a+") as r:
+        for l in newdiff:
+            r.write(l)
+    shutil.rmtree(repdir)
+    os.chdir(cwd)
+
+def checkmodels(traj, epoch, epochdir):
+    name = traj
+    traj = os.path.join(epochdir, traj)  # check this works
+    repdir = os.path.join(epochdir, "Report")
+    with open(traj, 'r') as t:
+        nremodels = 0
+        i = 0
+        position = []
+        for line in t:
+            if line.startswith("ENDMDL"):
+                nremodels += 1
+                position.append(i)  # with this we have position at which slice
+            i += 1
+        patterns = ("HIP", "HID", "HIE", "ASP", "ASH", "GLU", "GLH") #residues that we need to report
+        models = makemodels(name, traj, nremodels, epoch, epochdir, repdir, position)
+
+    for model in models:
+        modname = str(model.split("/")[-1])
+        rep = []
+        with open(os.path.join(repdir, model), 'r') as t:
+            for line in t:
+                for p in patterns:
+                    if re.findall(p, line):
+                        rep.append(line)
+        newdic = {}
+        for line in rep:#this step to filter repeated lines
+            l = line.split()
+            chainnre = str(l[4])+str(l[5])
+            try:
+                if l[3] not in newdic:
+                    newdic[l[3]] = chainnre
+                if l[3] in newdic and chainnre not in newdic[l[3]]:
+                    newdic[l[3]].join(chainnre)
+            except IndexError:
+                pass
+
+            '''
+            try:
+                if l[3] not in newdic:
+                    newdic[l[3]] = [l[5]]
+                if l[3] in newdic and l[5] not in newdic[l[3]]:
+                    newdic[l[3]].append(l[5])
+            '''
+
+        repname = "report_" + modname
+        with open(os.path.join(repdir, repname), "a+") as report:
+            #report.write("Report for model %s of %s of epoch %s:\n" % (modname, name, epoch))
+            for key, value in newdic.items():
+                report.write('%s:%s\n' % (key, value))
+
+def makemodels(name, traj, nremodels, epoch, epochdir, repdir, position):
+    name = name.split(".")[0]
+    for i in range(1, nremodels + 1):
+        models = open(os.path.join(repdir, "%s_model_%s" % (name, i)), "a+")
+        models.close()
+    models = glob.glob(os.path.join(repdir, "%s_model*" % name), recursive=True)
+    for model in models:
+        mod = int(model.split("_")[-1])
+        with open(model, "a+") as f, open(traj, 'r') as t:
+            if mod == 1:
+                j = 1
+                for line in t:
+                    if j <= position[0] + 1:
+                        f.write(line)
+                        j += 1
+                    else:
+                        j += 1
+                        continue
+            else:
+                j = 1
+                for line in t:
+                    if int(position[mod - 2]) + 1 < j <= int(position[mod - 1]) + 1:
+                        f.write(line)
+                        j += 1
+                    else:
+                        j += 1
+                        continue
+    return models
+
+def appendreport(epoch):
+    cwd = os.getcwd()
+    outputdir = os.path.join(cwd, "output")
+    epochdir = os.path.join(outputdir, str(epoch))
+    for f in os.listdir(epochdir):
+        if f.startswith("Report"):
+            with open(os.path.join(epochdir, f), "r") as rep:
+                replines = rep.readlines()
+    with open(os.path.join(outputdir, "VarProt.log"), "a+") as vp:
+        vp.write("Variable protonation states in epoch %s:\n" % epoch)
+        for line in replines:
+            vp.write(line)
+
+def prepareforpropka(file, dire):
+    name = os.path.basename(file)
+    preparedfile = str(name).replace(".pdb", "_prepared.pdb")
+    with open(os.path.join(dire, preparedfile), "w") as fin, open(file, "r") as init:
+        for line in init:
+            if "ASH" in line:
+                linemod = line.replace("ASH", "ASP")
+            elif "GLH" in line:
+                linemod = line.replace("GLH", "GLU")
+            else:
+                linemod = line
+            fin.write(linemod)
+    return preparedfile

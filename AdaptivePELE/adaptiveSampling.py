@@ -21,7 +21,8 @@ from AdaptivePELE.validator import controlFileValidator
 from AdaptivePELE.spawning import spawning, spawningTypes
 from AdaptivePELE.simulation import simulationrunner, simulationTypes
 from AdaptivePELE.clustering import clustering, clusteringTypes
-from AdaptivePELE.utilities.utilities import protonate, suppress_stdout, varprot
+from AdaptivePELE.utilities.utilities import suppress_stdout, varprot
+from contextlib import contextmanager
 try:
     import multiprocessing as mp
     PARALLELIZATION = True
@@ -124,7 +125,6 @@ def cleanPreviousSimulation(output_path, allTrajs):
     except OSError:
         # this folder may not exist, in which case we just carry on
         pass
-
 
 def createMappingForFirstEpoch(initialStructures, topologies, processors):
     """
@@ -233,7 +233,8 @@ def checkSymmetryDict(clusteringBlock, initialStructures, resname, reschain, res
     symmetries = clusteringBlock[blockNames.ClusteringTypes.params].get(blockNames.ClusteringTypes.symmetries, {})
     for structure in initialStructures:
         PDB = atomset.PDB()
-        PDB.initialise(structure, resname=resname,chain=reschain, resnum = resnum)
+        with suppress_stdout():
+            PDB.initialise(structure, resname=resname,chain=reschain, resnum = resnum)
         utilities.assertSymmetriesDict(symmetries, PDB)
 
 
@@ -429,7 +430,7 @@ def needToRecluster(oldClusteringMethod, newClusteringMethod):
         return oldClusteringMethod.similarityEvaluator.typeEvaluator != newClusteringMethod.similarityEvaluator.typeEvaluator
 
 
-def clusterEpochTrajs(varprotstates,clusteringMethod, epoch, epochOutputPathTempletized, topologies, outputPathConstants=None):
+def clusterEpochTrajs(clusteringMethod, epoch, epochOutputPathTempletized, topologies, outputPathConstants=None):
     """
         Cluster the trajecotories of a given epoch
 
@@ -446,21 +447,11 @@ def clusterEpochTrajs(varprotstates,clusteringMethod, epoch, epochOutputPathTemp
 """
 
     snapshotsJSONSelectionString = generateTrajectorySelectionString(epoch, epochOutputPathTempletized)
-    if varprotstates is True:
-        cwd = os.getcwd()
-        outputdir = os.path.join(cwd,"output")
-        epochdir = os.path.join(outputdir,str(epoch))
-        traj = [f for f in os.listdir(epochdir) if f.endswith(".pdb")]
-        for f in traj:
-            name = f
-            path = os.path.join(epochdir,f)
-            protonate(path,epochdir)
     paths = ast.literal_eval(snapshotsJSONSelectionString) #this might be the line that causes the warning message
     if len(glob.glob(paths[-1])) == 0:
         sys.exit("No trajectories to cluster! Matching path:%s" % paths[-1])
     with suppress_stdout():
         clusteringMethod.cluster(paths, topology=topologies, epoch=epoch, outputPathConstants=outputPathConstants)
-
 
 def clusterPreviousEpochs(clusteringMethod, finalEpoch, epochOutputPathTempletized, simulationRunner, topologies, outputPathConstants=None):
     """
@@ -756,9 +747,8 @@ def main(jsonParams, clusteringHook=None):
             utilities.print_unbuffered("Iteration", i)
             outputDir = outputPathConstants.epochOutputPathTempletized % i
             utilities.makeFolder(outputDir)
-
-            simulationRunner.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i)
-            topologies.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i, i)
+            simulationRunner.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i) #this writes nre processors to processorsmapping.txt
+            topologies.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i, i) #this writes
             if i == 0:
                 # write the object to file at the start of the first epoch, so
                 # the topologies can always be loaded
@@ -766,8 +756,9 @@ def main(jsonParams, clusteringHook=None):
         processManager.barrier()
         if processManager.isMaster():
             utilities.print_unbuffered("Production run...")
-        if not debug:#the following is the line that fails when giving input of diff atoms
-           simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies, spawningCalculator.parameters.reportFilename, processManager)
+        if not debug:
+            varprotstates = varprot(simulationrunnerBlock)
+            simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies, spawningCalculator.parameters.reportFilename, processManager, varprotstates, restart)
         processManager.barrier()
 
         if processManager.isMaster(): #in here we need to process and protonate the trajectories
@@ -775,8 +766,7 @@ def main(jsonParams, clusteringHook=None):
                 simulationRunner.processTrajectories(outputPathConstants.epochOutputPathTempletized % i, topologies, i)
             utilities.print_unbuffered("Clustering...")
             startTime = time.time()
-            varprotstates = varprot(simulationrunnerBlock)
-            clusterEpochTrajs(varprotstates, clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
+            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
             endTime = time.time()
             utilities.print_unbuffered("Clustering ligand: %s sec" % (endTime - startTime))
 
