@@ -9,7 +9,7 @@ import string
 import numbers
 import itertools
 from builtins import range
-import multiprocessing as mp
+#import multiprocessing as mp
 import numpy as np
 import mdtraj as md
 import AdaptivePELE.constants
@@ -17,9 +17,9 @@ from AdaptivePELE.constants import constants, blockNames
 from AdaptivePELE.simulation import simulationTypes
 from AdaptivePELE.atomset import atomset, RMSDCalculator
 from AdaptivePELE.utilities import utilities, PDBLoader
-from AdaptivePELE.utilities.utilities import suppress_stdout, prottmp, gettmpdir, makeepochreport, appendreport
+from AdaptivePELE.utilities.utilities import suppress_stdout, prottmp, makeepochreport, appendreport
 from functools import partial
-
+from ray.util.multiprocessing import Pool
 import re
 
 SKLEARN = True
@@ -249,7 +249,7 @@ class SimulationRunner:
         if len(self.processorsToClusterMapping) == 0:
             return
         utilities.writeProcessorMappingToDisk(epochDir, "processorMapping.txt", self.processorsToClusterMapping)
-
+        return self.processorsToClusterMapping
     def readMappingFromDisk(self, epochDir):
         """
             Read the processorsToClusterMapping from disk
@@ -473,7 +473,7 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE equilibration took %.2f sec" % (endTime - startTime))
 
-    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, varprotStates, restart):
+    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, varprotStates, restart, pH):
         """
             Run a short PELE simulation
 
@@ -491,7 +491,8 @@ class PeleSimulation(SimulationRunner):
             :type processManager: :py:class:`.ProcessesManager`
         """
         trajName = "".join(self.parameters.trajectoryName.split("_%d"))
-        if varprotStates is True and epoch == 0 and restart is False: #clean previous log file
+        #this function cleans the existing protonation log file when starting a new simulation
+        if varprotStates is True and epoch == 0 and restart is False:
             outpath = os.path.split(processManager.syncFolder)[0]
             logfile = os.path.join(outpath, "VarProt.log")
             if os.path.exists(logfile):
@@ -507,14 +508,12 @@ class PeleSimulation(SimulationRunner):
                 n = re.sub(r'[^A-Za-z0-9/_.]+', '', n)
                 inputtoprotonate.append(n)
 
-            tmppath = gettmpdir(n) #here we get tmpdir
-
-#cd            for path in inputtoprotonate: #use this and comment the next block for debug
-#                prottmp(path, epoch)
-
+#            for path in inputtoprotonate: #use this and comment the next block for debug
+#                prottmp(path, epoch, pH)
+            #create a pool of processors to run "prottmp" function in parallel
             with suppress_stdout():
-                pool = mp.Pool(len(inputtoprotonate))
-                funct = partial(prottmp, epoch=epoch) #parallelize the protonation of all inputs in tmp/ directory
+                pool = Pool()
+                funct = partial(prottmp, epoch=epoch, pH=pH)
                 pool.map(funct, inputtoprotonate)
                 pool.close()
                 pool.join()
@@ -551,9 +550,9 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE took %.2f sec" % (endTime - startTime))
 
-        if varprotStates is True and epoch != 0:
-            makeepochreport(epoch) #this makes report for each epoch with protonation changes in trajectory files
-            appendreport(epoch) #this appends each epoch report to global log file
+#        if varprotStates is True and epoch != 0:
+#            makeepochreport(epoch) #this makes report for each epoch with protonation changes in trajectory files
+#            appendreport(epoch) #this appends each epoch report to global log file
 
     def getEquilibrationControlFile(self, peleControlFileDict):
         """

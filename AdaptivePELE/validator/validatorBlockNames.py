@@ -206,7 +206,8 @@ class SimulationParams:
         "boxType": "basestring",
         "postprocessing": "bool",
         "cylinderBases": "list",
-        "variableProtStates": "bool"
+        "variableProtStates": "bool",
+        "pH": "numbers.Real"
     }
     exitCondition = {
         "types": {

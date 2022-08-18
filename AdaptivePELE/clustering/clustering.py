@@ -609,8 +609,8 @@ class ContactsClusteringEvaluator(ClusteringEvaluator):
         """
         #here we have to modify the dictionary of the atoms so that an error is not raised
         if pdb.atoms != cluster.pdb.atoms: #rename the dictionary
-            #pdb.atoms, pdb.atomList = modify2(cluster.pdb, pdb)
-            cluster.pdb.atoms, cluster.pdb.atomList = modify2(cluster.pdb, pdb)
+            pdb.atoms, pdb.atomList = modify2(cluster.pdb, pdb)
+            #cluster.pdb.atoms, cluster.pdb.atomList = modify2(cluster.pdb, pdb)
         dist = self.RMSDCalculator.computeRMSD(cluster.pdb, pdb)
         return dist >= cluster.threshold, dist
 
@@ -1129,7 +1129,6 @@ class Clustering(object):
             scd = atomset.computeSquaredCentroidDifference(cluster.pdb, pdb)
             if scd > self.clusteringEvaluator.getInnerLimit(cluster):
                 continue
-            #if cluster and pdb not similar modify the
             isSimilar, dist = self.clusteringEvaluator.isElement(pdb, cluster,
                                                                  self.resname, self.resnum,
                                                                  self.resChain, self.contactThresholdDistance)
@@ -2072,42 +2071,46 @@ def modify(pdb_atoms,cluster_atoms):
     return new, newlist
 
 def modify2(cluster, pdb):
-    '''
-    length = len(cluster.atomList)
-    newlist = []
-    for i in range(0, length):
-        newlist.append(pdb.atomList[i])
-    pdbkeys = list(pdb.atoms.keys())
-    pdbvalues = list(pdb.atoms.values())
-    newkeys = []
-    newvalues = []
-    for i in range(0, length):
-        newkeys.append(pdbkeys[i])
-        newvalues.append(pdbvalues[i])
-    newdic = dict(zip(newkeys, newvalues))
-    '''
-
-
     oldkeys = list(pdb.atoms.keys())
-    pdbkeys = list(cluster.atoms.keys())
-    pdbvalues = list(cluster.atoms.values())
-    newdic = dict(zip(pdbkeys, pdbvalues))
-    newlist = pdbkeys
+    newkeys = list(cluster.atoms.keys())
+    #we have to modify the pdb values of the dictionary such as they are only modify the numbers (not coordinates)
+    oldvalues = list(pdb.atoms.values())
+    pdbcoordinates = [] #we retrieve the pdb coordinates
+    for i in oldvalues:
+        i = str(i)
+        line = i.split("[")
+        line = line[1].split("]")
+        line = line[0]
+        pdbcoordinates.append(line)
+    clustervalues = list(cluster.atoms.values())
+    clustercoordinates = [] #we retrieve the cluster coordinates
+    for i in clustervalues:
+        i = str(i)
+        line = i.split("[")
+        line = line[1].split("]")
+        line = line[0] #these are cluster coordinates that need to be replaced
+        clustercoordinates.append(line)
+    newvalues = []  # new values for pdb based on cluster numbers but pdb coordinates
+    j = 0
+    for i in clustervalues:
+        i = str(i)
+        line = i.replace(str(clustercoordinates[j]), str(pdbcoordinates[j]))
+        newvalues.append(line)
+        j += 1
+    newdic = dict(zip(newkeys, newvalues)) #we create a new dictionary with cluster keys and cluster values (with pdb coordinates)
+    newlist = newkeys
     #we also modify the string containing pdb
     pdbstring = pdb.pdb.split("\n")
-    clusterstring = cluster.pdb.split("\n")
     i = 0
     newstring = []
     for line in pdbstring:
-        #if i == len(pdbkeys):
-        #    break
         elements = line.split()
         lenghtline = len(elements)
-        if i < len(pdbkeys):
+        if i < len(newkeys):
             keytoreplace = oldkeys[i].split(":")
-            newkey = pdbkeys[i].split(":")
+            newkey = newkeys[i].split(":")
         if lenghtline > 1 and elements[1] == keytoreplace[0]:
-            n = line.replace(str(keytoreplace[0]),str(newkey[0]))
+            n = line.replace(str(keytoreplace[0]), str(newkey[0]))
             i += 1
             newstring.append(str(n))
         else:
@@ -2116,47 +2119,3 @@ def modify2(cluster, pdb):
     pdb.pdb = "\n".join(str(e) for e in newstring)
 
     return newdic, newlist
-
-
-    '''
-    oldkeys = list(cluster.atoms.keys())
-    pdbkeys = list(pdb.atoms.keys())
-    pdbvalues = list(pdb.atoms.values())
-    newdic = dict(zip(pdbkeys, pdbvalues))
-    newlist = pdbkeys
-    # we also modify the string containing pdb
-    pdbstring = cluster.pdb.split("\n")
-    clusterstring = pdb.pdb.split("\n")
-    i = 0
-    newstring = []
-    heavyatomspdb = []
-    for e in pdbkeys:
-        heavyatomspdb.append(e)
-    for line in pdbstring:
-        # if i == len(pdbkeys):
-        #    break
-        elements = line.split()
-        lenghtline = len(elements)
-        if i < len(pdbkeys):
-            try:
-                keytoreplace = oldkeys[i].split(":")
-                newkey = pdbkeys[i].split(":")
-            except IndexError:
-                pass
-        if lenghtline > 1 and elements[1] == keytoreplace[0]:
-            try:
-                n = line.replace(str(keytoreplace[0]), str(newkey[0]))
-                i += 1
-                newstring.append(str(n))
-            except IndexError:
-                pass
-        else:
-            try:
-                newstring.append(str(line))
-            except IndexError:
-                pass
-
-    cluster.pdb = "\n".join(str(e) for e in newstring)
-
-    return newdic, newlist
-    '''

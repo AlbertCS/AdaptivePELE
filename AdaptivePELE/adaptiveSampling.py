@@ -12,6 +12,7 @@ import errno
 import argparse
 import numpy as np
 from builtins import range
+from contextlib import contextmanager
 import AdaptivePELE
 from AdaptivePELE.constants import blockNames, constants
 from AdaptivePELE.atomset import atomset
@@ -21,8 +22,7 @@ from AdaptivePELE.validator import controlFileValidator
 from AdaptivePELE.spawning import spawning, spawningTypes
 from AdaptivePELE.simulation import simulationrunner, simulationTypes
 from AdaptivePELE.clustering import clustering, clusteringTypes
-from AdaptivePELE.utilities.utilities import suppress_stdout, varprot
-from contextlib import contextmanager
+from AdaptivePELE.utilities.utilities import suppress_stdout, varprot, makeprotreport
 try:
     import multiprocessing as mp
     PARALLELIZATION = True
@@ -747,8 +747,8 @@ def main(jsonParams, clusteringHook=None):
             utilities.print_unbuffered("Iteration", i)
             outputDir = outputPathConstants.epochOutputPathTempletized % i
             utilities.makeFolder(outputDir)
-            simulationRunner.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i) #this writes nre processors to processorsmapping.txt
-            topologies.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i, i) #this writes
+            procemapping = simulationRunner.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i) #this is a list to map structures every epoch, it is the same as processorsmapping.txt written in directory
+            topologies.writeMappingToDisk(outputPathConstants.epochOutputPathTempletized % i, i)
             if i == 0:
                 # write the object to file at the start of the first epoch, so
                 # the topologies can always be loaded
@@ -757,16 +757,17 @@ def main(jsonParams, clusteringHook=None):
         if processManager.isMaster():
             utilities.print_unbuffered("Production run...")
         if not debug:
-            varprotstates = varprot(simulationrunnerBlock)
-            simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies, spawningCalculator.parameters.reportFilename, processManager, varprotstates, restart)
+            varprotstates, pH = varprot(simulationrunnerBlock) #this checks if varprotstates is used and pH to use PROPKA
+            simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies,
+                                           spawningCalculator.parameters.reportFilename, processManager, varprotstates, restart, pH)
         processManager.barrier()
 
-        if processManager.isMaster(): #in here we need to process and protonate the trajectories
+        if processManager.isMaster():
             if simulationRunner.parameters.postprocessing:
                 simulationRunner.processTrajectories(outputPathConstants.epochOutputPathTempletized % i, topologies, i)
             utilities.print_unbuffered("Clustering...")
             startTime = time.time()
-            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants) #in here we need to process and protonate the trajectories
+            clusterEpochTrajs(clusteringMethod, i, outputPathConstants.epochOutputPathTempletized, topologies, outputPathConstants)
             endTime = time.time()
             utilities.print_unbuffered("Clustering ligand: %s sec" % (endTime - startTime))
 
@@ -824,6 +825,9 @@ def main(jsonParams, clusteringHook=None):
                                                                                        i + 1,
                                                                                        topologies=topologies)
                     utilities.writeProcessorMappingToDisk(outputPathConstants.tmpFolder, "processMapping.txt", procMapping)
+                    epoch = outputDir.split("/")[1]
+                    if varprotstates and int(epoch) != 0:
+                        makeprotreport(procemapping, epoch) #this makes prot report
                 processManager.barrier()
                 if not processManager.isMaster():
                     procMapping = utilities.readProcessorMappingFromDisk(outputPathConstants.tmpFolder, "processMapping.txt")
