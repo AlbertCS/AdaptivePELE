@@ -827,7 +827,7 @@ def main(jsonParams, clusteringHook=None):
                     utilities.writeProcessorMappingToDisk(outputPathConstants.tmpFolder, "processMapping.txt", procMapping)
                     epoch = outputDir.split("/")[1]
                     if varprotstates and int(epoch) != 0:
-                        makeprotreport(procemapping, epoch) #this makes prot report
+                        makeprotreport(procemapping, epoch) #this makes prot report at the end of every epoch
                 processManager.barrier()
                 if not processManager.isMaster():
                     procMapping = utilities.readProcessorMappingFromDisk(outputPathConstants.tmpFolder, "processMapping.txt")

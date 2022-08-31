@@ -2049,28 +2049,13 @@ def loadReportFile(reportFile):
     metrics = utilities.loadtxtfile(reportFile)
     return filterRepeatedReports(metrics)
 
-def modify(pdb_atoms,cluster_atoms):
-    res = list(cluster_atoms.keys())[0]
-    x = str(res).split(":")
-    num = int(x[0])
-    res2 = list(pdb_atoms.keys())[0]
-    x2 = str(res2).split(":")
-    num2 = int(x2[0])
-    diff = num-num2 #here print absolute value
-    new = {}
-    for key, value in pdb_atoms.items():
-        y = str(key).split(":")
-        y2 = int(y[0])
-        re = str(key)
-        rest = re.replace(y[0],"")
-        nw = y2 + diff
-        new[str(nw) + rest] = value
-    newlist = []
-    for key in new:
-        newlist.append(key)
-    return new, newlist
-
 def modify2(cluster, pdb):
+    """
+    This function modifies takes 2 arguments, and modifies them so that the pdb matches that in the cluster. Cluster and
+    pdb are 2 objects, which contain a dictionary, a list and a string. If the heavy atom names of the ligand in the pdb
+    do not match those in the cluster, the simulation would stop, so all three are modified.
+
+    """
     oldkeys = list(pdb.atoms.keys())
     newkeys = list(cluster.atoms.keys())
     #we have to modify the pdb values of the dictionary such as they are only modify the numbers (not coordinates)

@@ -17,7 +17,7 @@ from AdaptivePELE.constants import constants, blockNames
 from AdaptivePELE.simulation import simulationTypes
 from AdaptivePELE.atomset import atomset, RMSDCalculator
 from AdaptivePELE.utilities import utilities, PDBLoader
-from AdaptivePELE.utilities.utilities import suppress_stdout, prottmp, makeepochreport, appendreport
+from AdaptivePELE.utilities.utilities import suppress_stdout, prottmp
 from functools import partial
 from ray.util.multiprocessing import Pool
 import re
@@ -550,9 +550,6 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE took %.2f sec" % (endTime - startTime))
 
-#        if varprotStates is True and epoch != 0:
-#            makeepochreport(epoch) #this makes report for each epoch with protonation changes in trajectory files
-#            appendreport(epoch) #this appends each epoch report to global log file
 
     def getEquilibrationControlFile(self, peleControlFileDict):
         """
