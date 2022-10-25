@@ -1056,16 +1056,6 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
-
-def varprot(simulationrunnerBlock):
-    """
-        Check if variableprot flag is used
-
-    """
-    if simulationrunnerBlock['params']['protonationStates'] and simulationrunnerBlock['params']['pH'] is None:
-        simulationrunnerBlock['params']['pH'] = "7.00"
-    return simulationrunnerBlock['params']['protonationStates'], simulationrunnerBlock['params']['pH']
-
 def protinp(filetoopen, pH):
     """
             Processes file with PROPKA either using PREPWIZARD or PROTASSIGN:

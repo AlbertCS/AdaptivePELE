@@ -22,7 +22,7 @@ from AdaptivePELE.validator import controlFileValidator
 from AdaptivePELE.spawning import spawning, spawningTypes
 from AdaptivePELE.simulation import simulationrunner, simulationTypes
 from AdaptivePELE.clustering import clustering, clusteringTypes
-from AdaptivePELE.utilities.utilities import suppress_stdout, varprot, makeprotreport
+from AdaptivePELE.utilities.utilities import suppress_stdout, makeprotreport
 try:
     import multiprocessing as mp
     PARALLELIZATION = True
@@ -758,7 +758,7 @@ def main(jsonParams, clusteringHook=None):
             utilities.print_unbuffered("Production run...")
         if not debug:
             simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies,
-                                           spawningCalculator.parameters.reportFilename, processManager, simulationrunnerBlock['params']['protonationStates'], restart, simulationrunnerBlock['params']['pH'])
+                                           spawningCalculator.parameters.reportFilename, processManager, restart)
         processManager.barrier()
 
         if processManager.isMaster():

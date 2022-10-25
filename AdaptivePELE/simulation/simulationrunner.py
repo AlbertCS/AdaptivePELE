@@ -476,7 +476,7 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE equilibration took %.2f sec" % (endTime - startTime))
 
-    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, protonationStates, restart, pH):
+    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, restart):
         """
             Run a short PELE simulation
 
@@ -498,7 +498,7 @@ class PeleSimulation(SimulationRunner):
         # varproStates is true and restart is false
         if self.parameters.protonationStates and epoch == 0 and not restart:
             outpath = os.path.split(processManager.syncFolder)[0]
-            logfile = os.path.join(outpath, "VarProt.log")
+            logfile = os.path.join(outpath, "protonationStates.log")
             if os.path.exists(logfile):
                 os.remove(logfile)
 
@@ -515,7 +515,7 @@ class PeleSimulation(SimulationRunner):
             #create a pool of processors to run "prottmp" function in parallel
             with suppress_stdout():
                 pool = Pool()
-                funct = partial(prottmp, epoch=epoch, pH=pH)
+                funct = partial(prottmp, epoch=epoch, pH=self.parameters.pH)
                 pool.map(funct, inputtoprotonate)
                 pool.close()
                 pool.join()

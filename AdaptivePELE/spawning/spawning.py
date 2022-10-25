@@ -360,7 +360,6 @@ class SpawningCalculator:
                 print('Writing to ', outputFilename, 'cluster', i)
                 procMapping.append(cluster.writeSpawningStructure(outputFilename))
                 counts += 1
-        #protonate here?
         print("counts & cluster centers", counts, np.where(np.array(degeneracyOfRepresentatives) > 0)[0].size)
         return counts, procMapping
 
