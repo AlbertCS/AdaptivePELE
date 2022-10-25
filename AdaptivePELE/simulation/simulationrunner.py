@@ -118,6 +118,9 @@ class SimulationParameters:
         self.boxType = None
         self.cylinderBases = None
         self.postprocessing = False
+        # Propka parameters initialitzation
+        self.variableProtStates = False
+        self.pH = 7.00
 
 
 class SimulationRunner:
@@ -473,7 +476,7 @@ class PeleSimulation(SimulationRunner):
         endTime = time.time()
         utilities.print_unbuffered("PELE equilibration took %.2f sec" % (endTime - startTime))
 
-    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, varprotStates, restart, pH):
+    def runSimulation(self, epoch, outputPathConstants, initialStructuresAsString, topologies, reportFileName, processManager, protonationStates, restart, pH):
         """
             Run a short PELE simulation
 
@@ -492,22 +495,21 @@ class PeleSimulation(SimulationRunner):
         """
         trajName = "".join(self.parameters.trajectoryName.split("_%d"))
         #this function cleans the existing protonation log file when starting a new simulation
-        if varprotStates is True and epoch == 0 and restart is False:
+        # varproStates is true and restart is false
+        if self.parameters.protonationStates and epoch == 0 and not restart:
             outpath = os.path.split(processManager.syncFolder)[0]
             logfile = os.path.join(outpath, "VarProt.log")
             if os.path.exists(logfile):
                 os.remove(logfile)
 
-        if varprotStates is True and epoch != 0:
+        if self.parameters.protonationStates and epoch != 0:
+            initialStructuresDict = json.loads(initialStructuresAsString.split(",")[0])
+            initialStruct = str(initialStructuresDict['files'][0]['path'])
             paths = [x.strip() for x in initialStructuresAsString.split("\n")]
-            paths = list(filter(None,paths))
-            inputtoprotonate = [] #list containing all files in tmp directory to be processed by propka
-            for path in paths:
-                n = path.split(":")
-                n = n[2]
-                n = re.sub(r'[^A-Za-z0-9/_.]+', '', n)
-                inputtoprotonate.append(n)
-
+            paths = list(filter(None, paths))
+            # List containing all files in tmp directory to be processed by propka
+            # Vigilar si initial structrues es pot tractar com un dict
+            inputtoprotonate = list(map(lambda path: re.sub(r'[^A-Za-z0-9/_.]+', '', path.split(":")[2]), paths))
 #            for path in inputtoprotonate: #use this and comment the next block for debug
 #                prottmp(path, epoch, pH)
             #create a pool of processors to run "prottmp" function in parallel
@@ -1556,6 +1558,10 @@ class RunnerBuilder:
             if exitConditionBlock:
                 exitConditionBuilder = ExitConditionBuilder()
                 params.exitCondition = exitConditionBuilder.build(exitConditionBlock, params.templetizedControlFile, params.processors)
+
+            # Params for propka
+            params.protonationStates = paramsBlock.get(blockNames.SimulationParams.protonationStates, False)
+            params.pH = paramsBlock.get(blockNames.SimulationParams.pH, 7.00)
 
             return PeleSimulation(params)
         elif simulationType == blockNames.SimulationType.md:

@@ -473,7 +473,7 @@ def clusterPreviousEpochs(clusteringMethod, finalEpoch, epochOutputPathTempletiz
     for i in range(finalEpoch):
         simulationRunner.readMappingFromDisk(epochOutputPathTempletized % i)
         topologies.readMappingFromDisk(epochOutputPathTempletized % i, i)
-        clusterEpochTrajs(clusteringMethod, i, epochOutputPathTempletized, topologies, outputPathConstants, varprotstates=None)
+        clusterEpochTrajs(clusteringMethod, i, epochOutputPathTempletized, topologies, outputPathConstants, protonationStates=None)
 
 
 def getWorkingClusteringObjectAndReclusterIfNecessary(firstRun, outputPathConstants, clusteringBlock, spawningParams, simulationRunner, topologies, processManager):
@@ -757,9 +757,8 @@ def main(jsonParams, clusteringHook=None):
         if processManager.isMaster():
             utilities.print_unbuffered("Production run...")
         if not debug:
-            varprotstates, pH = varprot(simulationrunnerBlock) #this checks if varprotstates is used and pH to use PROPKA
             simulationRunner.runSimulation(i, outputPathConstants, initialStructuresAsString, topologies,
-                                           spawningCalculator.parameters.reportFilename, processManager, varprotstates, restart, pH)
+                                           spawningCalculator.parameters.reportFilename, processManager, simulationrunnerBlock['params']['protonationStates'], restart, simulationrunnerBlock['params']['pH'])
         processManager.barrier()
 
         if processManager.isMaster():
@@ -826,7 +825,7 @@ def main(jsonParams, clusteringHook=None):
                                                                                        topologies=topologies)
                     utilities.writeProcessorMappingToDisk(outputPathConstants.tmpFolder, "processMapping.txt", procMapping)
                     epoch = outputDir.split("/")[1]
-                    if varprotstates and int(epoch) != 0:
+                    if simulationrunnerBlock['params']['protonationStates'] and int(epoch) != 0:
                         makeprotreport(procemapping, epoch) #this makes prot report at the end of every epoch
                 processManager.barrier()
                 if not processManager.isMaster():

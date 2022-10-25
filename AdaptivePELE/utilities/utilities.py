@@ -1056,22 +1056,15 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
+
 def varprot(simulationrunnerBlock):
     """
         Check if variableprot flag is used
 
     """
-    #this function checks if variableprot flag is used
-    val = list(simulationrunnerBlock.values())
-    val = val[1]
-    varpr = False
-    phval = "7.00"
-    for key, value in val.items():
-        if key == "variableProtStates":
-            varpr = True
-        if key == "pH":
-            phval = value
-    return varpr, phval
+    if simulationrunnerBlock['params']['protonationStates'] and simulationrunnerBlock['params']['pH'] is None:
+        simulationrunnerBlock['params']['pH'] = "7.00"
+    return simulationrunnerBlock['params']['protonationStates'], simulationrunnerBlock['params']['pH']
 
 def protinp(filetoopen, pH):
     """

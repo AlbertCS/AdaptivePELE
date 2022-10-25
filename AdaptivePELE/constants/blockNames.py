@@ -194,7 +194,8 @@ class SimulationParams:
     sphere = "sphere"
     postprocessing = "postprocessing"
     ligandsToRestrict = "ligandsToRestrict"
-    protonate = "variableProtStates"
+    # Protonation variables
+    protonationStates = "protonationStates"
     pH = "pH"
 
 class ExitConditionType:
