@@ -16,12 +16,14 @@ elif "mn.bsc" in machine:
     DATA_FOLDER = "/gpfs/projects/bsc72/PELE++/nord/V1.6/Data"
     DOCUMENTS_FOLDER = "/gpfs/projects/bsc72/PELE++/nord/V1.6/Documents"
     PYTHON = "python"
+    SCHRODINGER_PATH = "/gpfs/projects/bsc72/SCHRODINGER_ACADEMIC"
 
 
 elif "bsc.mn" in machine:
     PELE_EXECUTABLE = "/gpfs/projects/bsc72/PELE++/mniv/V1.6/build/PELE-1.6_mpi"
     DATA_FOLDER = "/gpfs/projects/bsc72/PELE++/mniv/V1.6/Data"
     DOCUMENTS_FOLDER = "/gpfs/projects/bsc72/PELE++/mniv/V1.6/Documents"
+    SCHRODINGER_PATH = "/gpfs/projects/bsc72/SCHRODINGER_ACADEMIC"
 
 elif "bullx" in machine:
     # this values are not correct for the minoTauro hardware, just leaving it
@@ -35,10 +37,22 @@ elif machine == "bscls309":
     DATA_FOLDER = "/home/jgilaber/PELE-repo/Data"
     DOCUMENTS_FOLDER = "/home/jgilaber/PELE-repo/Documents"
 
-else:
+elif machine == "quiquevb23":
     PELE_EXECUTABLE = "/home/quiquevb23/Escriptori/PELE/PELE/bin/PELE-1.7"
     DATA_FOLDER = "/home/quiquevb23/Escriptori/Experiments/Data"
     DOCUMENTS_FOLDER = "/home/quiquevb23/Escriptori/Experiments/Documents"
+
+elif machine == "albertcs-Latitude-7420":
+    PELE_EXECUTABLE = "/home/albertcs/Prog_Inst/PELE/binPELE/PELE-1.7"
+    DATA_FOLDER = "/home/albertcs/Prog_Inst/PELE/PELE-repo/Data"
+    DOCUMENTS_FOLDER = "/home/albertcs/Prog_Inst/PELE/PELE-repo/Documents"
+    SCHRODINGER_PATH = "/home/albertcs/Prog_Inst/Maestro/bin"
+
+else:
+    PELE_EXECUTABLE = None
+    DATA_FOLDER = None
+    DOCUMENTS_FOLDER = None
+    SCHRODINGER_PATH = None
 
 
 inputFileTemplate = "{ \"files\" : [ { \"path\" : \"%s\" } ] }"

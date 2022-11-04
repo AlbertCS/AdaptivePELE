@@ -9,7 +9,7 @@ import string
 import numbers
 import itertools
 from builtins import range
-#import multiprocessing as mp
+import multiprocessing as mp
 import numpy as np
 import mdtraj as md
 import AdaptivePELE.constants
@@ -63,6 +63,7 @@ class SimulationParameters:
         self.templetizedControlFile = ""
         self.dataFolder = ""
         self.documentsFolder = ""
+        self.schrodinger = ""
         self.iterations = 0
         self.peleSteps = 0
         self.seed = 0
@@ -496,29 +497,30 @@ class PeleSimulation(SimulationRunner):
         trajName = "".join(self.parameters.trajectoryName.split("_%d"))
         #this function cleans the existing protonation log file when starting a new simulation
         # varproStates is true and restart is false
+        outpath = os.path.split(processManager.syncFolder)[0]
         if self.parameters.protonationStates and epoch == 0 and not restart:
-            outpath = os.path.split(processManager.syncFolder)[0]
             logfile = os.path.join(outpath, "protonationStates.log")
             if os.path.exists(logfile):
                 os.remove(logfile)
 
         if self.parameters.protonationStates and epoch != 0:
-            initialStructuresDict = json.loads(initialStructuresAsString.split(",")[0])
-            initialStruct = str(initialStructuresDict['files'][0]['path'])
-            paths = [x.strip() for x in initialStructuresAsString.split("\n")]
+            # paths = [x.strip() for x in initialStructuresAsString.split("\n")]
+            paths = [x for x in initialStructuresAsString.split("\n")]
             paths = list(filter(None, paths))
             # List containing all files in tmp directory to be processed by propka
-            # Vigilar si initial structrues es pot tractar com un dict
             inputtoprotonate = list(map(lambda path: re.sub(r'[^A-Za-z0-9/_.]+', '', path.split(":")[2]), paths))
-#            for path in inputtoprotonate: #use this and comment the next block for debug
-#                prottmp(path, epoch, pH)
-            #create a pool of processors to run "prottmp" function in parallel
+            """
+            for path in inputtoprotonate: #use this and comment the next block for debug
+                prottmp(path, epoch, self.parameters.pH, self.parameters.schrodinger)
+            """
+            # create a pool of processors to run "prottmp" function in parallel
             with suppress_stdout():
                 pool = Pool()
-                funct = partial(prottmp, epoch=epoch, pH=self.parameters.pH)
+                funct = partial(prottmp, epoch=epoch, pH=self.parameters.pH, schrodinger=self.parameters.schrodinger)
                 pool.map(funct, inputtoprotonate)
                 pool.close()
                 pool.join()
+
 
         ControlFileDictionary = {"COMPLEXES": initialStructuresAsString,
                                  "PELE_STEPS": self.parameters.peleSteps,
@@ -561,7 +563,7 @@ class PeleSimulation(SimulationRunner):
             :param peleControlFileDict: Dictionary with pele control file options
             :type peleControlFileDict: dict
 
-            :returns: dict -- Dictionary with pele control file options
+            :returns: dict -- Dictionary with pzele control file options
         """
         # Remove dynamical changes in control file
         peleControlFileDict["commands"][0]["PeleTasks"][0].pop("exitConditions", None)
@@ -1512,6 +1514,8 @@ class RunnerBuilder:
             params.dataFolder = paramsBlock.get(blockNames.SimulationParams.dataFolder, constants.DATA_FOLDER)
             params.documentsFolder = paramsBlock.get(blockNames.SimulationParams.documentsFolder, constants.DOCUMENTS_FOLDER)
             params.executable = paramsBlock.get(blockNames.SimulationParams.executable, constants.PELE_EXECUTABLE)
+            # Path to schrodinger
+            params.schrodinger = paramsBlock.get(blockNames.SimulationParams.schrodinger, constants.SCHRODINGER_PATH)
             if params.dataFolder is None or params.documentsFolder is None or params.executable is None:
                 raise utilities.ImproperParameterValueException("PELE parameters not defined! Please ensure that you have defined the path to the PELE executable, the Data and Documents paths")
             params.templetizedControlFile = paramsBlock[blockNames.SimulationParams.templetizedControlFile]
@@ -1562,6 +1566,9 @@ class RunnerBuilder:
             # Params for propka
             params.protonationStates = paramsBlock.get(blockNames.SimulationParams.protonationStates, False)
             params.pH = paramsBlock.get(blockNames.SimulationParams.pH, 7.00)
+            if params.schrodinger is None and params.protonationStates:
+                raise utilities.ImproperParameterValueException(
+                    "PELE parameters not defined! Please ensure that you have defined the path to Schrodinger")
 
             return PeleSimulation(params)
         elif simulationType == blockNames.SimulationType.md:

@@ -33,5 +33,5 @@ AdaptivePELE/*/__pycache__
 .idea
 AdaptivePELE/AdaptiveTest_CUDA.*
 AdaptivePELE/output/*
-AdaptivePELE/DataLocal/*
 AdaptivePELE/tmp_/*
+AdaptivePELE/DataLocal/*

@@ -824,9 +824,9 @@ def main(jsonParams, clusteringHook=None):
                                                                                        i + 1,
                                                                                        topologies=topologies)
                     utilities.writeProcessorMappingToDisk(outputPathConstants.tmpFolder, "processMapping.txt", procMapping)
-                    epoch = outputDir.split("/")[1]
+                    epoch = outputDir.split("/")[-1]
                     if simulationrunnerBlock['params']['protonationStates'] and int(epoch) != 0:
-                        makeprotreport(procemapping, epoch) #this makes prot report at the end of every epoch
+                        makeprotreport(procemapping, epoch, outputDir) #this makes prot report at the end of every epoch
                 processManager.barrier()
                 if not processManager.isMaster():
                     procMapping = utilities.readProcessorMappingFromDisk(outputPathConstants.tmpFolder, "processMapping.txt")

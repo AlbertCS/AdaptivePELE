@@ -20,14 +20,17 @@ from contextlib import contextmanager
 import itertools
 import re
 from difflib import Differ
+
 try:
     import cPickle as pickle
 except ImportError:
     import pickle
 from AdaptivePELE.atomset import RMSDCalculator, atomset
 from AdaptivePELE.freeEnergies import utils
+
 try:
     import multiprocessing as mp
+
     PARALELLIZATION = True
 except ImportError:
     PARALELLIZATION = False
@@ -53,6 +56,7 @@ class Topology(object):
     """
         Container object that points to the topology used in each trajectory
     """
+
     def __init__(self, path):
         self.path = os.path.abspath(path)
         self.topologies = []
@@ -114,8 +118,8 @@ class Topology(object):
             :param trajectoryMapping: Mapping of the trajectories and the corresponding topologies
             :type trajectoryMapping: list
         """
-        mapping = trajectoryMapping[1:]+[trajectoryMapping[0]]
-        self.topologyMap[epoch] = [self.topologyMap[i_epoch][i_traj-1] for i_epoch, i_traj, _ in mapping]
+        mapping = trajectoryMapping[1:] + [trajectoryMapping[0]]
+        self.topologyMap[epoch] = [self.topologyMap[i_epoch][i_traj - 1] for i_epoch, i_traj, _ in mapping]
 
     def getTopology(self, epoch, trajectory_number):
         """
@@ -128,7 +132,7 @@ class Topology(object):
 
             :returns: list -- List with topology information
         """
-        return self.topologies[self.topologyMap[epoch][trajectory_number-1]]
+        return self.topologies[self.topologyMap[epoch][trajectory_number - 1]]
 
     def getTopologyFile(self, epoch, trajectory_number):
         """
@@ -141,7 +145,7 @@ class Topology(object):
 
             :returns: str -- Path to the topology file
         """
-        return self.topologyFiles[self.topologyMap[epoch][trajectory_number-1]]
+        return self.topologyFiles[self.topologyMap[epoch][trajectory_number - 1]]
 
     def getTopologyFromIndex(self, index):
         """
@@ -165,7 +169,7 @@ class Topology(object):
 
             :returns: int -- Index of the corresponding topology
         """
-        return self.topologyMap[epoch][trajectory_number-1]
+        return self.topologyMap[epoch][trajectory_number - 1]
 
     def writeMappingToDisk(self, epochDir, epoch):
         """
@@ -175,7 +179,7 @@ class Topology(object):
                 mapping
             :type epochDir: str
         """
-        with open(epochDir+"/topologyMapping.txt", "w") as f:
+        with open(epochDir + "/topologyMapping.txt", "w") as f:
             f.write("%s\n" % ':'.join(map(str, self.topologyMap[epoch])))
 
     def readMappingFromDisk(self, epochDir, epoch):
@@ -187,10 +191,11 @@ class Topology(object):
             :type epochDir: str
         """
         try:
-            with open(epochDir+"/topologyMapping.txt") as f:
+            with open(epochDir + "/topologyMapping.txt") as f:
                 self.topologyMap[epoch] = list(map(int, f.read().rstrip().split(':')))
         except IOError:
-            sys.stderr.write("WARNING: topologyMapping.txt not found, you might not be able to recronstruct fine-grained pathways\n")
+            sys.stderr.write(
+                "WARNING: topologyMapping.txt not found, you might not be able to recronstruct fine-grained pathways\n")
 
 
 class TopologyCompat(object):
@@ -289,7 +294,7 @@ def getSnapshots(trajectoryFile, verbose=False, topology=None, use_pdb=False):
             return snapshots
 
         remarkInfo = "REMARK 000 File created using PELE++\nREMARK source            : %s\nREMARK original model nr : %d\nREMARK First snapshot is 1, not 0 (as opposed to report)\n%s"
-        snapshotsWithInfo = [remarkInfo % (trajectoryFile, i+1, snapshot) for i, snapshot in enumerate(snapshots)]
+        snapshotsWithInfo = [remarkInfo % (trajectoryFile, i + 1, snapshot) for i, snapshot in enumerate(snapshots)]
     elif ext == ".xtc":
         with md.formats.XTCTrajectoryFile(trajectoryFile) as f:
             snapshotsWithInfo, _, _, _ = f.read()
@@ -342,6 +347,7 @@ def getFileSuffix(filename, separator="_"):
     name, _ = os.path.splitext(filename)
     return name.split(separator)[-1]
 
+
 def isReport(reportFilename):
     """
         Checks whether the file is a PELE report
@@ -352,6 +358,7 @@ def isReport(reportFilename):
         :returns: bool -- Whether the file is a PELE report
     """
     return getFileSuffix(reportFilename).isdigit()
+
 
 def getReportNum(reportFilename):
     """
@@ -364,6 +371,7 @@ def getReportNum(reportFilename):
     """
     return int(getFileSuffix(reportFilename))
 
+
 def getReportList(reportBase):
     """
         Get a list of the report filenames in the path specified,
@@ -375,6 +383,7 @@ def getReportList(reportBase):
         :return: list -- List of report files
     """
     return glob_sorted(reportBase, key=getReportNum, filter_func=isReport)
+
 
 def getPrmtopNum(prmtopFilename):
     """
@@ -398,7 +407,7 @@ def calculateContactMapEigen(contactMap):
         :returns: (numpy.ndarray, numpy.ndarray) -- eigenvalues, eigenvectors
     """
     nLig, nCA = contactMap.shape
-    extendedCM = np.zeros((nLig+nCA, nLig+nCA))
+    extendedCM = np.zeros((nLig + nCA, nLig + nCA))
     extendedCM[nCA:, :nCA] = contactMap
     extendedCM[:nCA, nCA:] = contactMap.T
     assert (extendedCM == extendedCM.T).all(), "Extended ContactMap not symmetric"
@@ -486,7 +495,7 @@ def ensure_connectivity_msm(msm):
         return msm.stationary_distribution
     else:
         counts = msm.count_matrix_full
-        counts += 1/counts.shape[0]
+        counts += 1 / counts.shape[0]
         trans = utils.buildRevTransitionMatrix(counts)
         _, eic = getSortedEigen(trans)
         return getStationaryDistr(eic[:, 0])
@@ -528,10 +537,10 @@ def gen_atom_name(index):
     # The maximum number of unique ids generated by this method is 175760 =
     # 26*26*26*10, however, remember that generally the maximum number of unique
     # atoms that can be used with vmd is around 32000
-    ind1 = index//6760
+    ind1 = index // 6760
     ind2 = (index % 6760)
     ind3 = ind2 % 260
-    return chr(65+ind1)+chr(65+ind2//260)+chr(65+ind3//10)+str(ind3 % 10)
+    return chr(65 + ind1) + chr(65 + ind2 // 260) + chr(65 + ind3 // 10) + str(ind3 % 10)
 
 
 def join_coordinates_prob(coords, p):
@@ -579,7 +588,7 @@ def write_PDB_clusters(pmf_xyzg, title="clusters.pdb", use_beta=False, elements=
 def distanceCOM(coords1, coords2):
     coords1 = np.array(coords1)
     coords2 = np.array(coords2)
-    return np.linalg.norm(coords1-coords2)
+    return np.linalg.norm(coords1 - coords2)
 
 
 def sign(x, tol=1e-7):
@@ -651,7 +660,7 @@ def getMetricsFromReportsInEpoch(reportName, outputFolder, nTrajs):
     for i in range(1, nTrajs):
         report = np.loadtxt(os.path.join(outputFolder, reportName % i))
         if len(report.shape) < 2:
-            metrics.append(report.tolist()+[i, 0])
+            metrics.append(report.tolist() + [i, 0])
         else:
             traj_line = np.array([i] * report.shape[0])
             snapshot_line = np.array(range(report.shape[0]))
@@ -664,7 +673,7 @@ def getSASAcolumnFromControlFile(JSONdict):
         if 'sasa' in metricBlock['type'].lower():
             # Report files have 4 fixed columnts, task, steps, accepted steps
             # and energy
-            return i+4
+            return i + 4
     raise ValueError("No SASA metric found in control file!!! Please add it in order to use the moving box feature")
 
 
@@ -759,7 +768,7 @@ def convert_trajectory_to_pdb(trajectory, topology, output, output_folder):
         for i, conf in enumerate(snapshots):
             PDB = atomset.PDB()
             PDB.initialise(conf, topology=topology_contents)
-            fw.write("MODEL     %4d\n" % (i+1))
+            fw.write("MODEL     %4d\n" % (i + 1))
             fw.write(PDB.pdb)
             fw.write("ENDMDL\n")
         fw.write("END\n")
@@ -789,7 +798,7 @@ def getCpuCount():
     except TypeError:
         cores = None
     # Take 1 less than the count of processors, to not clog the machine
-    return cores or max(1, mp.cpu_count()-1)
+    return cores or max(1, mp.cpu_count() - 1)
 
 
 def writeProcessorMappingToDisk(folder, filename, processorMapping):
@@ -823,7 +832,8 @@ def readProcessorMappingFromDisk(folder, filename):
         with open(os.path.join(folder, filename)) as f:
             return list(map(ast.literal_eval, f.read().rstrip().split(':')))
     except IOError:
-        sys.stderr.write("WARNING: processorMapping.txt not found, you might not be able to recronstruct fine-grained pathways\n")
+        sys.stderr.write(
+            "WARNING: processorMapping.txt not found, you might not be able to recronstruct fine-grained pathways\n")
 
 
 def print_unbuffered(*args):
@@ -908,9 +918,9 @@ def generateRotationMatrixAroundAxis(axis, angle):
     c = np.cos(angle)
     s = np.sin(angle)
     x, y, z = axis
-    return np.array([[c+(1-c)*x**2, x*y*(1-c)-z*s, x*z*(1-c)+y*s],
-                     [x*y*(1-c)+z*s, c+(1-c)*y**2, y*z*(1-c)-x*s],
-                     [x*z*(1-c)-y*s, y*z*(1-c)+x*s, c+(1-c)*z**2]])
+    return np.array([[c + (1 - c) * x ** 2, x * y * (1 - c) - z * s, x * z * (1 - c) + y * s],
+                     [x * y * (1 - c) + z * s, c + (1 - c) * y ** 2, y * z * (1 - c) - x * s],
+                     [x * z * (1 - c) - y * s, y * z * (1 - c) + x * s, c + (1 - c) * z ** 2]])
 
 
 def getTopologyObject(topology_file):
@@ -1046,6 +1056,7 @@ def get_file_extension(full_path):
     _, ext = get_file_name_extension(full_path)
     return ext
 
+
 @contextmanager
 def suppress_stdout():
     with open(os.devnull, "w") as devnull:
@@ -1056,7 +1067,8 @@ def suppress_stdout():
         finally:
             sys.stdout = old_stdout
 
-def protinp(filetoopen, pH):
+
+def protinp(filetoopen, pH, schrodinger):
     """
             Processes file with PROPKA either using PREPWIZARD or PROTASSIGN:
             - In the case of prepwizard, input file can be pdb directly
@@ -1066,19 +1078,21 @@ def protinp(filetoopen, pH):
     if not isinstance(pH, str):
         pH = str(pH)
     name = os.path.basename(filetoopen)
-#    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", filetoopen, "-omae", str(name) + ".mae"])
-#    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-nowater", "-propka_pH", "7.00", "-WAIT", str(name) + ".mae",
-#                     str(name) + "protonated.mae"])
+    #    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-ipdb", filetoopen, "-omae", str(name) + ".mae"])
+    #    subprocess.call(["/opt/schrodinger2021-4/utilities/protassign", "-nowater", "-propka_pH", "7.00", "-WAIT", str(name) + ".mae",
+    #                     str(name) + "protonated.mae"])
+    pathPrep = f"{schrodinger}/utilities/prepwizard"
     subprocess.call(
-        ["/opt/schrodinger2021-4/utilities/prepwizard", "-noepik", "-noimpref", "-nohtreat", "-disulfides",
-         "-propka_pH", pH, "-WAIT", filetoopen, "prot_" + name])
+        [pathPrep, "-noepik", "-noimpref", "-nohtreat", "-disulfides",
+         "-propka_pH", pH, "-WAIT", filetoopen, f"prot_{name}"])
 
-#    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name) + "protonated.mae", "-opdb",
-#                     "prot_" + name])
+    #    subprocess.call(["/opt/schrodinger2021-4/utilities/pdbconvert", "-imae", str(name) + "protonated.mae", "-opdb",
+    #                     "prot_" + name])
 
     return name
 
-def prottmp(path, epoch, pH):
+
+def prottmp(path, epoch, pH, schrodinger):
     """
             Main function to process trajectory files in every epoch, it is called from the runSimulation funciton in
             simulationrunner.py and is parallelized. This function first copies remark and ligand lines of the structures,
@@ -1092,35 +1106,34 @@ def prottmp(path, epoch, pH):
     if not os.path.isdir(dire):
         os.makedirs(dire, exist_ok=True)
     filename = os.path.basename(path)
+    num = filename[-5:-4]
+    """
     num = []
     for m in filename:
         if m.isdigit():
             num.append(m)
     num = num[1]
+    """
+    #path = os.path.join(outpath, path)
     os.rename(path, os.path.join(dire, filename))  # this moves the structure to temp directory "prot"
     os.chdir(dire)
     # the following will retrieve the proper ligand atoms (HETATM lines) and remark lines before processing the files
     dire = os.path.abspath(os.path.dirname(filename))
     filetoopen = os.path.join(dire, filename)
-    with open(filetoopen) as traj:
-        with open("lig_%s_%s" % (epoch, num), "w") as lig:
-            with open("remark_%s_%s" % (epoch, num), "w") as remark:
-                l = 0
-                liglen = 0
-                for line in traj:
-                    l += 1
-                    if line.startswith("REMARK") or line.startswith("MODEL"):
-                        remark.write(line)
-                    try:
-                        if line.split()[3] == "LIG":
-                            lig.write(line)
-                            liglen += 1
-                    except IndexError:
-                        pass
+    with open(filetoopen) as traj, open(f"lig_{epoch}_{num}", "w") as lig, open(f"remark_{epoch}_{num}", "w") as remark:
+        for line in traj:
+            if line.startswith("REMARK") or line.startswith("MODEL"):
+                remark.write(line)
+            try:
+                if line.split()[3] == "LIG":
+                    lig.write(line)
+            except IndexError:
+                pass
 
-    prepfile = prepareforpropka(filetoopen, dire) #we will use this function to rename titrable residues (ASH, GLH) to ASP and GLU to avoid errors with PROPKA
+    prepfile = prepareforpropka(filetoopen,
+                                dire)  # we will use this function to rename titrable residues (ASH, GLH) to ASP and GLU to avoid errors with PROPKA
     filetoopen = os.path.join(dire, prepfile)
-    filename2 = protinp(filetoopen, pH) #this function processes file with PROPKA
+    filename2 = protinp(filetoopen, pH, schrodinger)  # this function processes file with PROPKA
     '''
     rmv = glob.glob("*.log")+glob.glob("*.mae")
     for f in rmv:
@@ -1129,63 +1142,60 @@ def prottmp(path, epoch, pH):
     filetoopen2 = "prot_" + filename2
     file = os.path.join(dire, filetoopen2)
     out = filetoopen2.replace(".pdb", '_processed.pdb')
-    #we need to create a list because ppp.main processes output pdb as first element of a list
+    # we need to create a list because ppp.main processes output pdb as first element of a list
     out = [os.path.join(dire, out)]
     with suppress_stdout():
-        ppp.main(file, dire, out) #preprocess with PPP
+        ppp.main(file, dire, out)  # preprocess with PPP
     tmpdir = os.path.join(cwd, tmpdir)
     file = os.path.basename(out[0])
-    l2 = 0
-    #finally copy again the remark and ligand lines to the modified files so that the simulation can continue
-    with open(file, "r") as f:
-        with open(os.path.join(dire, "p"+filename), "a+") as good:
-            with open("remark_%s_%s" % (epoch, num), "r") as remark:
-                with open("lig_%s_%s" % (epoch, num), "r") as lig:
-                    for line in remark:
-                        good.write(line)
-                        l2 += 1
-                    for line in f:
-                        try:
-                            if not line.split()[3] == "LIG":
-                                good.write(line)
-                                l2 += 1
-                        except IndexError:
-                            good.write(line) #write TER lines
-                            pass
-                    for line in lig:
-                        good.write(line)
-                    good.write("TER\n")
-    os.rename(os.path.join(dire, "p" + filename), os.path.join(tmpdir, filename))
+    # finally copy again the remark and ligand lines to the modified files so that the simulation can continue
+    with open(file, "r") as f, open(os.path.join(dire, "p" + filename), "a+") as good, open(
+            "remark_%s_%s" % (epoch, num), "r") as remark, open("lig_%s_%s" % (epoch, num), "r") as lig:
+        for line in remark:
+            good.write(line)
+        for line in f:
+            try:
+                if not line.split()[3] == "LIG":
+                    good.write(line)
+            except IndexError:
+                good.write(line)  # write TER lines
+                pass
+        for line in lig:
+            good.write(line)
+        good.write("TER\n")
+    file1 = os.path.join(dire, "p" + filename)
+    file2 = os.path.join(tmpdir, filename)
+    os.rename(file1, file2)
     name = os.path.join(tmpdir, filename)
     os.chdir(cwd)
     return name
 
 
-def appendreport(epoch):
+def appendreport(epoch, epochDir):
     """
-    This appends the individual reports in the report directory for each epoch to the VarProt.log file in the output
+    This appends the individual reports in the report directory for each epoch to the protonationStates.log file in the output
     directory
 
     """
-    cwd = os.getcwd()
-    outputdir = os.path.join(cwd, "output")
-    epochdir = os.path.join(outputdir, str(epoch))
-    repdir = os.path.join(epochdir, "Report")
+    outputdir = epochDir[:len(epochDir)-2]
+    repdir = os.path.join(epochDir, "Report")
     replines = []
     empty = True
-    with open(os.path.join(outputdir, "VarProt.log"), "a+") as vp:
+    # #######
+    with open(os.path.join(outputdir, "protonationStates.log"), "a+") as vp:
         for f in os.listdir(repdir):
             with open(os.path.join(repdir, f), "r") as rep:
                 if os.stat(os.path.join(repdir, f)).st_size == 0:
                     continue
                 elif os.stat(os.path.join(repdir, f)).st_size != 0:
                     if empty:
-                        vp.write("Protonation changes in epoch %s:\n" % (epoch))
+                        vp.write("Protonation changes in epoch %s:\n" % epoch)
                         empty = False
                     for line in rep.readlines():
                         replines.append(line)
         for line in replines:
             vp.write(str(line))
+
 
 def prepareforpropka(file, dire):
     """
@@ -1206,7 +1216,7 @@ def prepareforpropka(file, dire):
     return preparedfile
 
 
-def makeprotreport(procMapping, epoch):
+def makeprotreport(procMapping, epoch, epochDir):
     """
     This function creates an epoch report that is latter appended to the global report stating the protonation changes
     using the "appendreport" function.
@@ -1216,26 +1226,26 @@ def makeprotreport(procMapping, epoch):
 
     """
     cwd = os.getcwd()
-    outputdir = os.path.join(cwd, "output")
-    epochdir = os.path.join(outputdir, str(epoch))
-    os.chdir(epochdir)
+    os.chdir(epochDir)
     trajectories = glob.glob("trajectory*")
-    dire = "Report"
-    if not os.path.isdir(dire):
-        os.mkdir(dire)
-    repdir = os.path.join(epochdir, dire)
+    repdir = os.path.join(epochDir, "Report")
+    outputDir = epochDir[:-1]
+    if not os.path.isdir(repdir):
+        os.mkdir(repdir)
     for traj in trajectories:
         trajnum = traj.split(".")[0].split("_")[1]
-        procmap = procMapping[int(trajnum)-1]
-        compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch) #this writes individual reports for
-        #each of the trajectories in the report directory
+        procmap = procMapping[int(trajnum) - 1]
+        compareprotdiff(epochDir, outputDir, traj, trajnum, procmap, repdir,
+                        epoch)  # this writes individual reports for
+        # each of the trajectories in the report directory
+    appendreport(epoch, epochDir)  # this appends the individual reports to the global report "protonationStates.log"
+    shutil.rmtree(repdir)  # remove reports from rep directory
     os.chdir(cwd)
-    appendreport(epoch) #this appends the individual reports to the global report "VarProt.log"
-    shutil.rmtree(repdir) #remove reports from rep directory
+
 
 def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
     """
-    This function is called iteratively for all of the trajectories to evaluate the changes in protonation individually,
+    This function is called iteratively for all the trajectories to evaluate the changes in protonation individually,
     first the lines in the pdb containing titratable residues are stored in a list for the traj, then the model that
     generated the traj (mapped in the processorsMapping.txt) is created with the "makemodelss" function and stored in
     the epoch directory, and the lines contataining titratable residues in these file are stored in another list; then
@@ -1248,23 +1258,24 @@ def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
     trajmap = procmap[1]
     modelmap = procmap[2]
     traj = os.path.join(epochdir, traj)
-    rep = [] #this list will contain the lines of the traj with titratable residues
-    repmap = [] #this list will contain the lines of the structure that generated the traj with titratable residues
+    rep = []  # this list will contain the lines of the traj with titratable residues
+    repmap = []  # this list will contain the lines of the structure that generated the traj with titratable residues
     patterns = ("HIP", "HID", "HIE", "ASP", "ASH", "GLU", "GLH")  # residues that we need to report
     with open(traj, 'r') as t:
         for line in t:
             for p in patterns:
                 if re.findall(p, line):
                     rep.append(line)
-    model = makemodelss(trajmap, epochmap, modelmap, outputdir, epochdir) #this function create a new file with the exact
-    #model to compare with the trajectory
+    model = makemodelss(trajmap, epochmap, modelmap, outputdir,
+                        epochdir)  # this function create a new file with the exact
+    # model to compare with the trajectory
     with open(model, 'r') as m:
         for line in m:
             for p in patterns:
                 if re.findall(p, line):
                     repmap.append(line)
 
-    newdic = {} #dictionary with the prot states in trajectory being key the prot state and value the residue position
+    newdic = {}  # dictionary with the prot states in trajectory being key the prot state and value the residue position
     for line in rep:  # this step to filter repeated lines
         l = line.split()
         chainnre = str(l[4]) + str(l[5])
@@ -1274,11 +1285,11 @@ def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
             if l[3] in newdic and chainnre not in newdic[l[3]]:
                 if not isinstance(newdic[l[3]], list):
                     newdic[l[3]] = [newdic[l[3]]]
-                newdic[l[3]].append(chainnre) #append new value to existing key
+                newdic[l[3]].append(chainnre)  # append new value to existing key
         except IndexError:
             pass
 
-    newdic2 = {} #dictionary with the prot states in model (seed) that generated the trajectory, being key the prot state and value the residue position
+    newdic2 = {}  # dictionary with the prot states in model (seed) that generated the trajectory, being key the prot state and value the residue position
     for line in repmap:  # this step to filter repeated lines
         l = line.split()
         chainnre = str(l[4]) + str(l[5])
@@ -1296,6 +1307,7 @@ def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
         for line in finalrep:
             r.write(line)
 
+
 def makemodelss(trajmap, epochmap, modelmap, outputdir, epochdir):
     """
     This function creates the file that needs to be compared with the given trajectory by going to the epoch directory
@@ -1304,7 +1316,7 @@ def makemodelss(trajmap, epochmap, modelmap, outputdir, epochdir):
 
     """
     epochmapdir = os.path.join(outputdir, str(epochmap))
-    trajmapname = "trajectory_%s.pdb" % (trajmap)
+    trajmapname = f"trajectory_{trajmap}.pdb"
     os.chdir(epochmapdir)
     trajmapname = os.path.join(epochmapdir, trajmapname)
     with open(trajmapname, 'r') as t:
@@ -1319,6 +1331,7 @@ def makemodelss(trajmap, epochmap, modelmap, outputdir, epochdir):
     with open(trajmapname, 'r') as o, open("model_%s_%s_%s" % (epochmap, trajmap, modelmap), "w") as m:
         if modelmap == 1:
             j = 1
+            # Mirar si es pot fer amb enumerate()
             for line in o:
                 if j <= position[0] + 1:
                     m.write(line)
@@ -1340,11 +1353,12 @@ def makemodelss(trajmap, epochmap, modelmap, outputdir, epochdir):
                     j += 1
                     pass
 
-    #the following moves the model to the epoch of traj to compare
+    # the following moves the model to the epoch of traj to compare
     modelpath = os.path.join(epochdir, "model_%s_%s_%s" % (epochmap, trajmap, modelmap))
     os.rename(os.path.join(epochmapdir, "model_%s_%s_%s" % (epochmap, trajmap, modelmap)), modelpath)
     os.chdir(epochdir)
     return modelpath
+
 
 def comparerepdic(newdic, newdic2, trajnum):
     """
@@ -1352,7 +1366,7 @@ def comparerepdic(newdic, newdic2, trajnum):
 
     """
     report = []
-    #report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
+    # report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
     key_list = list(newdic2.keys())
     val_list = list(newdic2.values())
     for k, v in newdic.items():
@@ -1363,17 +1377,18 @@ def comparerepdic(newdic, newdic2, trajnum):
                     if e in o:
                         lis = o
                         prevpos = key_list[val_list.index(lis)]
-                        #report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
+                        # report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
                         report.append("In trajectory %s, residue %s changed from %s to %s\n" % (trajnum, e, prevpos, k))
 
         else:
-            for e in v: #iterate over residues of a certain prot state
-                if e not in newdic2[k]: #if one residue has diff prot state in previous epoch
+            for e in v:  # iterate over residues of a certain prot state
+                if e not in newdic2[k]:  # if one residue has diff prot state in previous epoch
                     for o in val_list:
                         if e in o:
                             lis = o
                             prevpos = key_list[val_list.index(lis)]
-                            #report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
-                            report.append("In trajectory %s, residue %s changed from %s to %s\n" % (trajnum, e, prevpos, k))
+                            # report.append("Changes in protonation states for trajectory %s of epoch %s\n" % (trajnum, epoch))
+                            report.append(
+                                "In trajectory %s, residue %s changed from %s to %s\n" % (trajnum, e, prevpos, k))
 
     return report

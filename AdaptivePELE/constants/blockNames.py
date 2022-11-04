@@ -133,6 +133,8 @@ class SimulationParams:
     templetizedControlFile = "controlFile"
     dataFolder = "data"
     documentsFolder = "documents"
+    # Path to schrodinger
+    schrodinger = "schrodinger"
     destination = "destination"
     origin = "origin"
     seed = "seed"

@@ -155,6 +155,7 @@ class SimulationParams:
         "executable": "basestring",
         "data": "basestring",
         "documents": "basestring",
+        "schrodinger": "basestring",
         "destination": "basestring",
         "origin": "basestring",
         "time": "numbers.Real",
