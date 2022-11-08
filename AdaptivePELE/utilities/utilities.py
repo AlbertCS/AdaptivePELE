@@ -1114,7 +1114,7 @@ def prottmp(path, epoch, pH, schrodinger):
             num.append(m)
     num = num[1]
     """
-    #path = os.path.join(outpath, path)
+    # path = os.path.join(outpath, path)
     os.rename(path, os.path.join(dire, filename))  # this moves the structure to temp directory "prot"
     os.chdir(dire)
     # the following will retrieve the proper ligand atoms (HETATM lines) and remark lines before processing the files
@@ -1177,11 +1177,10 @@ def appendreport(epoch, epochDir):
     directory
 
     """
-    outputdir = epochDir[:len(epochDir)-2]
+    outputdir = epochDir[:-2]
     repdir = os.path.join(epochDir, "Report")
     replines = []
     empty = True
-    # #######
     with open(os.path.join(outputdir, "protonationStates.log"), "a+") as vp:
         for f in os.listdir(repdir):
             with open(os.path.join(repdir, f), "r") as rep:
@@ -1228,36 +1227,40 @@ def makeprotreport(procMapping, epoch, epochDir):
     cwd = os.getcwd()
     os.chdir(epochDir)
     trajectories = glob.glob("trajectory*")
-    repdir = os.path.join(epochDir, "Report")
+    repdir = os.path.join(os.getcwd(), "Report")
     outputDir = epochDir[:-1]
     if not os.path.isdir(repdir):
-        os.mkdir(repdir)
+        try:
+            os.mkdir(repdir)
+        except:
+            print("Could not create Report temporal folder")
     for traj in trajectories:
         trajnum = traj.split(".")[0].split("_")[1]
         procmap = procMapping[int(trajnum) - 1]
         compareprotdiff(epochDir, outputDir, traj, trajnum, procmap, repdir,
                         epoch)  # this writes individual reports for
         # each of the trajectories in the report directory
-    appendreport(epoch, epochDir)  # this appends the individual reports to the global report "protonationStates.log"
+    appendreport(epoch, os.getcwd())  # this appends the individual reports to the global report "protonationStates.log"
     shutil.rmtree(repdir)  # remove reports from rep directory
     os.chdir(cwd)
 
 
-def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
+def compareprotdiff(traj, trajnum, procmap, repdir, epoch):
     """
     This function is called iteratively for all the trajectories to evaluate the changes in protonation individually,
     first the lines in the pdb containing titratable residues are stored in a list for the traj, then the model that
     generated the traj (mapped in the processorsMapping.txt) is created with the "makemodelss" function and stored in
-    the epoch directory, and the lines contataining titratable residues in these file are stored in another list; then
+    the epoch directory, and the lines containing titratable residues in these file are stored in another list; then
     the 2 lists are filtered and converted to 2 dictionaries in which the key is the name of the residue and the value
     is the chain nre and residue nre, and finally the 2 dictionaries are compared using the "comparerepdic" function
     so that a report in the report directory (inside the epoch) is written for this trajectory
 
     """
+    cwd = os.getcwd()
     epochmap = procmap[0]  # this get epoch, traj and model to compare with and write report
     trajmap = procmap[1]
     modelmap = procmap[2]
-    traj = os.path.join(epochdir, traj)
+    traj = os.path.join(cwd, traj)
     rep = []  # this list will contain the lines of the traj with titratable residues
     repmap = []  # this list will contain the lines of the structure that generated the traj with titratable residues
     patterns = ("HIP", "HID", "HIE", "ASP", "ASH", "GLU", "GLH")  # residues that we need to report
@@ -1266,8 +1269,8 @@ def compareprotdiff(epochdir, outputdir, traj, trajnum, procmap, repdir, epoch):
             for p in patterns:
                 if re.findall(p, line):
                     rep.append(line)
-    model = makemodelss(trajmap, epochmap, modelmap, outputdir,
-                        epochdir)  # this function create a new file with the exact
+    model = makemodelss(trajmap, epochmap, modelmap, outputdir=cwd[:-2],
+                        epochdir=cwd)  # this function create a new file with the exact
     # model to compare with the trajectory
     with open(model, 'r') as m:
         for line in m:
