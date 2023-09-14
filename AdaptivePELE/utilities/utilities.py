@@ -1237,7 +1237,7 @@ def makeprotreport(procMapping, epoch, epochDir):
     for traj in trajectories:
         trajnum = traj.split(".")[0].split("_")[1]
         procmap = procMapping[int(trajnum) - 1]
-        compareprotdiff(epochDir, outputDir, traj, trajnum, procmap, repdir,
+        compareprotdiff(traj, trajnum, procmap, repdir,
                         epoch)  # this writes individual reports for
         # each of the trajectories in the report directory
     appendreport(epoch, os.getcwd())  # this appends the individual reports to the global report "protonationStates.log"
